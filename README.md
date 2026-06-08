@@ -55,12 +55,16 @@ The following components are currently confirmed working with this setup:
 
 AWDL stack:
 - AirDrop (bidirectional)
-- AirPlay
-- Screen Mirroring
+- AirPlay (bidirectional)
+- Screen Mirroring (bidirectional)
+- Personal Hotspot
+- Continuity Camera
 
 Continuity:
 - Handoff (e.g. Mail, Notes, Safari)
-- Sidecar (currently not functional)
+
+Sidecar:
+- currently not functional
 
 ---
 
