@@ -123,16 +123,16 @@ https://www.tonymacx86.com/threads/experimental-fork-of-oclp-3-0-0-nightly-moder
 ## Credits
 
 - Dortania OCLP Team (original OCLP authors and developers)
-- @crystall1nedev (Eva Isabella Luna) (original OCLP 3.0.0 Nightly release)
-- @lzhoang2801 (original OCLP 3.0.0 Nightly fork)
-- @kgp-macPro (preservation, maintenance, AMFIPass integration, AppleHDA restoration, testing and documentation)
-- @laobamac_yyds (amfipassbeta PatcherSupportPkg)
-- @YBronst (OCLP Nightly development)
+- [crystall1nedev](https://github.com/crystall1nedev) (Eva Isabella Luna) (original OCLP 3.0.0 Nightly release)
+- [lzhoang2801](https://github.com/lzhoang2801) (original OCLP 3.0.0 Nightly fork)
+- [kgp-macPro](https://github.com/kgp-macPro) (preservation, maintenance, AMFIPass integration, AppleHDA restoration, testing and documentation)
+- [laobamac](https://github.com/laobamac) (amfipassbeta PatcherSupportPkg)
+- [YBronst](https://github.com/YBronst) (OCLP Nightly development)
 - badbrain (boot-arg ipc_control_port_options=0 support)
-- @zxystd (itlwm / AirportItlwm project)
-- @lshbluesky (IntelBluetoothFirmware maintenance and releases)
-- @Vinhts (IntelBTPatcher Tahoe 26.5 Bluetooth LE fixes)
-- @Z3c0ld (IntelBTPatcher Tahoe 26.5 Bluetooth LE fixes)
+- [zxystd](https://github.com/zxystd) (itlwm / AirportItlwm project)
+- [lshbluesky](https://github.com/lshbluesky) (IntelBluetoothFirmware maintenance and releases)
+- [Vinhts](https://github.com/Vinhts) (IntelBTPatcher Tahoe 26.5 Bluetooth LE fixes)
+- [Z3c0ld](https://github.com/Z3c0ld) (IntelBTPatcher Tahoe 26.5 Bluetooth LE fixes)
 - InsanelyMac community
 - tonymacx86 community (mirror thread)
 
