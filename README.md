@@ -129,7 +129,7 @@ https://www.tonymacx86.com/threads/experimental-fork-of-oclp-3-0-0-nightly-moder
 - [laobamac](https://github.com/laobamac) (amfipassbeta PatcherSupportPkg)
 - [YBronst](https://github.com/YBronst) (OCLP Nightly development)
 - badbrain (boot-arg ipc_control_port_options=0 support)
-- [zxystd](https://github.com/zxystd) (itlwm / AirportItlwm project)
+- [zxystd](https://github.com/zxystd) (itlwm/AirportItlwm project)
 - [lshbluesky](https://github.com/lshbluesky) (IntelBluetoothFirmware maintenance and releases)
 - [Vinhts](https://github.com/Vinhts) (IntelBTPatcher Tahoe 26.5 Bluetooth LE fixes)
 - [Z3c0ld](https://github.com/Z3c0ld) (IntelBTPatcher Tahoe 26.5 Bluetooth LE fixes)
