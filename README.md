@@ -87,6 +87,34 @@ https://github.com/kgp-macPro/PatcherSupportPkg-laobamac
 
 This PatcherSupportPkg provides complete Universal-Binaries and enables compatibility with AMFIPass.kext and `-amfipassbeta`.
 
+### Verified Payload Relationship
+
+The PatcherSupportPkg history requires an important distinction.
+
+The final published OCLP 3.0.0 Nightly release by lzhoang2801 references a newer PatcherSupportPkg that no longer contains the required Tahoe `AppleHDA.kext`. As a result, root patching with that currently published configuration fails because the expected AppleHDA payload cannot be found.
+
+The separately preserved edition corrects this by redirecting OCLP to an earlier lzhoang2801 PatcherSupportPkg that still contains the required `AppleHDA.kext`.
+
+This amfipassbeta edition instead uses a KGP-maintained derivative of laobamac's PatcherSupportPkg. Because laobamac's original package also did not contain the required Tahoe `AppleHDA.kext`, that payload was restored unchanged by KGP from the earlier working lzhoang2801 PatcherSupportPkg.
+
+An offline comparison of all resources actually consumed by the enabled `Modern Wireless` and `Modern Audio` patchsets confirmed:
+
+- `wifip2pd` is byte-identical in the earlier lzhoang2801 package and the KGP-maintained laobamac derivative.
+- The restored `AppleHDA.kext` is byte-identical to the payload from the earlier working lzhoang2801 PatcherSupportPkg.
+- Five Modern Wireless framework executables have identical architectures, paths, permissions and executable `__text` sections:
+  - `IO80211`
+  - `IO80211Old.dylib`
+  - `LibSystemShim.dylib`
+  - `WiFiPeerToPeer`
+  - `WiFiPeerToPeerOld.dylib`
+- The relevant difference in these five files is their embedded code-signature and associated link-edit metadata.
+- The earlier lzhoang2801 variants are ad-hoc signed.
+- The laobamac variants contain non-ad-hoc embedded signatures.
+
+The PatcherSupportPkg redirect does not modify OCLP's Modern Wireless or Modern Audio patch definitions, destination paths, APFS snapshot handling, kernel-cache rebuilding, root-patch application logic or root-patch reversion logic.
+
+This comparison refers specifically to the earlier working lzhoang2801 PatcherSupportPkg deliberately used by the preserved edition. It does not describe or make assumptions about the newer incomplete PatcherSupportPkg referenced by lzhoang2801's final published release.
+
 ---
 
 ## Repository Scope
@@ -94,7 +122,7 @@ This PatcherSupportPkg provides complete Universal-Binaries and enables compatib
 This repository:
 
 - provides a reproducible working reference of the original OCLP 3.0.0 Nightly snapshot
-- restores missing resources required for modern AppleHDA, Wi-Fi and AWDL functionality
+- restores the missing Tahoe `AppleHDA.kext` and preserves the resources required for modern Wi-Fi and AWDL functionality
 - uses a PatcherSupportPkg compatible with AMFIPass.kext and `-amfipassbeta`, including AppleHDA
 - does **not introduce any new patch logic**
 
