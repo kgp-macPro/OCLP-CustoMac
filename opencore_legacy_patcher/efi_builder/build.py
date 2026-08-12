@@ -67,9 +67,6 @@ class BuildOpenCore:
         support.BuildSupport(self.model, self.constants, self.config).enable_kext("Lilu.kext", self.constants.lilu_version, self.constants.lilu_path)
         self.config["Kernel"]["Quirks"]["DisableLinkeditJettison"] = True
 
-        # macOS Sequoia support for Lilu plugins
-        self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " -lilubetaall"
-
         # Call support functions
         for function in [
             firmware.BuildFirmware,
@@ -84,10 +81,34 @@ class BuildOpenCore:
         ]:
             function(self.model, self.constants, self.config)
 
+        self._apply_amfipass_boot_arg_policy()
+
         # Work-around ocvalidate
         if self.constants.validate is False:
             logging.info("- Adding bootmgfw.efi BlessOverride")
             self.config["Misc"]["BlessOverride"] += ["\\EFI\\Microsoft\\Boot\\bootmgfw.efi"]
+
+
+    def _apply_amfipass_boot_arg_policy(self) -> None:
+        """
+        Couple KGP's AMFIPass boot argument to the final generated kext state.
+
+        User-supplied boot arguments are preserved. KGP only appends
+        -amfipassbeta when AMFIPass is enabled and the exact token is absent.
+        """
+
+        amfipass = support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("AMFIPass.kext")
+        if amfipass["Enabled"] is False:
+            return
+
+        nvram = self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]
+        boot_args = nvram["boot-args"]
+        if "-amfipassbeta" in boot_args.split():
+            return
+
+        logging.info("- Adding -amfipassbeta for AMFIPass")
+        separator = "" if not boot_args or boot_args.endswith(" ") else " "
+        nvram["boot-args"] = f"{boot_args}{separator}-amfipassbeta"
 
 
     def _generate_base(self) -> None:
