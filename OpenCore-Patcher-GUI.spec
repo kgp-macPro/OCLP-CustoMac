@@ -15,6 +15,15 @@ sys.path.append(os.path.abspath(os.getcwd()))
 
 from opencore_legacy_patcher import constants
 
+
+source_date_epoch = os.environ.get("SOURCE_DATE_EPOCH")
+if source_date_epoch is None:
+   raise RuntimeError("SOURCE_DATE_EPOCH is required for a reproducible application build")
+try:
+   build_date = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(int(source_date_epoch)))
+except ValueError as error:
+   raise RuntimeError("SOURCE_DATE_EPOCH must be an integer Unix timestamp") from error
+
 block_cipher = None
 
 datas = [
@@ -80,7 +89,7 @@ app = BUNDLE(coll,
                 "LSMinimumSystemVersion": "10.10.0",
                 "NSRequiresAquaSystemAppearance": False,
                 "NSHighResolutionCapable": True,
-                "Build Date": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                "Build Date": build_date,
                 "BuildMachineOSBuild": subprocess.run(["/usr/bin/sw_vers", "-buildVersion"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.decode().strip(),
                 "NSPrincipalClass": "NSApplication",
                 "CFBundleIconName": "oclp",

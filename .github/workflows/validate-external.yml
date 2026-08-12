@@ -11,16 +11,22 @@ on:
 jobs:
   build:
     name: Validate
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     if: github.repository_owner != 'dortania'
+    env:
+      PYTHONHASHSEED: '0'
     steps:
       - uses: actions/checkout@v4
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - name: Install Dependencies
-        run: python3 -m pip install -r requirements.txt
+          python-version: '3.14.3'
+          architecture: 'x64'
+      - name: Install locked dependencies
+        run: |
+          python3 -m venv .venv-build
+          PIP_CONFIG_FILE=/dev/null .venv-build/bin/python -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes --index-url https://pypi.org/simple -r requirements-lock.txt
+          .venv-build/bin/python -m ci_tooling.build_environment --validation-only
       - name: Validate
-        run: python3 OpenCore-Patcher-GUI.command --validate
+        run: .venv-build/bin/python OpenCore-Patcher-GUI.command --validate
         continue-on-error: true

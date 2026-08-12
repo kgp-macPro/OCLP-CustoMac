@@ -16,6 +16,7 @@ from ci_tooling.build_modules import (
     package,
     sign_notarize
 )
+from ci_tooling import build_environment
 
 
 def main() -> None:
@@ -69,6 +70,10 @@ def main() -> None:
 
     # Set 'Current Working Directory' to script directory
     os.chdir(Path(__file__).resolve().parent)
+
+    # Release artifacts must be generated from the exact, hash-locked v2.0
+    # environment. Validation runs have their own workflow entry point.
+    build_environment.verify()
 
 
     if (args.run_as_individual_steps is False) or (args.run_as_individual_steps and args.prepare_assets):

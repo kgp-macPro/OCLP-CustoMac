@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import plistlib
@@ -159,7 +160,12 @@ class GenerateApplication:
 
         _git_branch = self._git_branch or "Built from source"
         _git_commit = self._git_commit_url or ""
-        _git_commit_date = self._git_commit_date or time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        _git_commit_date = self._git_commit_date
+        if not _git_commit_date:
+            _git_commit_date = time.strftime(
+                "%Y-%m-%d %H:%M:%S UTC",
+                time.gmtime(int(os.environ["SOURCE_DATE_EPOCH"]))
+            )
 
         print("Embedding git data")
         _plist = plistlib.load(_file.open("rb"))
@@ -188,6 +194,23 @@ class GenerateApplication:
         )
 
 
+    def _refresh_ad_hoc_signature(self) -> None:
+        """Seal post-PyInstaller mutations for unsigned local builds.
+
+        PyInstaller ad-hoc signs the bundle before this module updates its
+        Info.plist and resources. Refresh only the outer, timestamp-free
+        ad-hoc seal. Configured release signing subsequently replaces it.
+        """
+        print("Refreshing local outer ad-hoc application signature")
+        subprocess_wrapper.run_and_verify(
+            [
+                "/usr/bin/codesign", "--force", "--sign", "-",
+                "--timestamp=none", self._application_output,
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+
+
     def generate(self) -> None:
         """
         Generate OpenCore-Patcher.app
@@ -200,3 +223,4 @@ class GenerateApplication:
         self._patch_sdk_version() if not self._git_branch or not self._git_branch.startswith('refs/tags') else None
         self._embed_git_data()
         self._embed_resources()
+        self._refresh_ad_hoc_signature()

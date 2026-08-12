@@ -1,10 +1,15 @@
-requests
-pyobjc
-wxpython
-pyinstaller
-packaging
-py_sip_xnu
-py-applescript
-markdown2
-macos-pkg-builder
-mac-signing-buddy
+# Direct application and build dependencies for the v2.0 source line.
+#
+# Release and CI builds must install requirements-lock.txt with
+# --require-hashes. This file documents the intentionally selected direct
+# dependencies; it is not a standalone mutable resolver input.
+requests==2.32.5
+pyobjc-framework-Cocoa==12.1
+wxPython==4.2.5
+PyInstaller==6.18.0
+packaging==26.0
+py-sip-xnu==1.0.4
+py-applescript==1.0.3
+markdown2==2.5.4
+macos-pkg-builder==2.3.0
+mac-signing-buddy==1.0.0
