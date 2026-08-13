@@ -81,6 +81,7 @@ class RootPatchStateProtectionTests(unittest.TestCase):
         self._write(self._metadata())
         result = self._evaluator(RootStateEvidence(True, "Broken")).evaluate(PATCHES)
         self.assertEqual(result.state, RootPatchState.INSTALLED_SAME)
+        self.assertEqual(result.installed_selection, ("Modern Audio", "Modern Wireless"))
         self.assertFalse(result.patch_allowed)
         self.assertTrue(result.revert_allowed(True))
         self.assertFalse(result.revert_allowed(False))
@@ -96,6 +97,7 @@ class RootPatchStateProtectionTests(unittest.TestCase):
         self._write(self._metadata(sha=OTHER_SHA))
         result = self._evaluator(RootStateEvidence(True, "Broken")).evaluate(PATCHES)
         self.assertEqual(result.state, RootPatchState.INSTALLED_DIFFERENT_BUILD)
+        self.assertEqual(result.installed_selection, ("Modern Audio", "Modern Wireless"))
         self.assertFalse(result.patch_allowed)
 
     def test_same_human_version_different_commit_is_not_same(self) -> None:
@@ -114,6 +116,7 @@ class RootPatchStateProtectionTests(unittest.TestCase):
         })
         result = self._evaluator(RootStateEvidence(True, "Broken")).evaluate(PATCHES)
         self.assertEqual(result.state, RootPatchState.LEGACY_FOREIGN)
+        self.assertIsNone(result.installed_selection)
         self.assertFalse(result.patch_allowed)
         self.assertTrue(result.revert_applicable)
 

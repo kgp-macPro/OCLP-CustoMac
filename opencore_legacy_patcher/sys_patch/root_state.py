@@ -61,6 +61,7 @@ class RootPatchStateResult:
     patch_allowed: bool
     revert_applicable: bool
     reason: str
+    installed_selection: tuple[str, ...] | None = None
 
     def revert_allowed(self, can_unpatch: bool) -> bool:
         return self.revert_applicable and can_unpatch
@@ -193,12 +194,14 @@ class RootPatchStateEvaluator:
         reason: str,
         *,
         revert_applicable: bool = False,
+        installed_selection: tuple[str, ...] | None = None,
     ) -> RootPatchStateResult:
         return RootPatchStateResult(
             state=state,
             patch_allowed=state == RootPatchState.CLEAN,
             revert_applicable=revert_applicable,
             reason=reason,
+            installed_selection=installed_selection,
         )
 
     def evaluate(self, requested_patches: dict) -> RootPatchStateResult:
@@ -305,6 +308,7 @@ class RootPatchStateEvaluator:
                 RootPatchState.INSTALLED_DIFFERENT_BUILD,
                 "Installed root patches were produced by a different exact build; revert, reboot, then repatch",
                 revert_applicable=True,
+                installed_selection=tuple(sorted(installed_selection)),
             )
 
         expected_selection = semantic_patch_selection(requested_patches)
@@ -313,10 +317,12 @@ class RootPatchStateEvaluator:
                 RootPatchState.INSTALLED_DIFFERENT_PATCH_SET,
                 "Installed and requested patch selections differ; revert, reboot, then apply the requested selection",
                 revert_applicable=True,
+                installed_selection=tuple(sorted(installed_selection)),
             )
 
         return self._result(
             RootPatchState.INSTALLED_SAME,
             "The requested root patches from this exact build are already installed",
             revert_applicable=True,
+            installed_selection=tuple(sorted(installed_selection)),
         )

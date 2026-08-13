@@ -9,6 +9,11 @@ import threading
 from .. import constants
 
 from ..sys_patch.patchsets import HardwarePatchsetDetection, HardwarePatchsetValidation
+from ..sys_patch.root_selection import (
+    SELECTABLE_ROOT_PATCHES,
+    RootPatchSelection,
+    SelectableRootPatch,
+)
 from ..sys_patch.root_state import RootPatchStateEvaluator, RootPatchState
 
 from ..wx_gui import (
@@ -38,6 +43,15 @@ class SysPatchDisplayFrame(wx.Frame):
         self.return_button: wx.Button = None
         self.available_patches: bool = False
         self.init_with_parent = True if parent else False
+        self.selection: RootPatchSelection = RootPatchSelection(frozenset(), frozenset())
+        self.selection_checkboxes: dict[SelectableRootPatch, wx.CheckBox] = {}
+        self.selection_summary: wx.StaticText = None
+        self.selection_state_label: wx.StaticText = None
+        self.start_button: wx.Button = None
+        self.revert_button: wx.Button = None
+        self.current_detection: HardwarePatchsetDetection = None
+        self.requested_patchset: dict = {}
+        self.root_state = None
 
         self.frame_modal = wx.Dialog(self.frame, title=title, size=(360, 200))
 
@@ -83,8 +97,9 @@ class SysPatchDisplayFrame(wx.Frame):
         # Labels: {patch name}
         patches: dict = {}
         requested_patchset: dict = {}
+        detection: HardwarePatchsetDetection = None
         def _fetch_patches(self) -> None:
-            nonlocal patches, requested_patchset
+            nonlocal patches, requested_patchset, detection
             detection = HardwarePatchsetDetection(constants=self.constants)
             patches = detection.device_properties
             requested_patchset = detection.patches
@@ -105,15 +120,22 @@ class SysPatchDisplayFrame(wx.Frame):
         available_label.Centre(wx.HORIZONTAL)
 
 
-        can_unpatch: bool = not patches[HardwarePatchsetValidation.UNPATCHING_NOT_POSSIBLE]
-
         if not any(not patch.startswith("Settings") and not patch.startswith("Validation") and patches[patch] is True for patch in patches):
             logging.info("No applicable patches available")
             patches = {}
 
+        applicable_patchsets = tuple(
+            patch
+            for patch, enabled in patches.items()
+            if not patch.startswith("Settings") and not patch.startswith("Validation") and enabled is True
+        )
+        bootstrap_state = RootPatchStateEvaluator(self.constants).evaluate(requested_patchset)
+        self.selection = RootPatchSelection.initialize(
+            applicable_patchsets,
+            bootstrap_state.installed_selection,
+        )
+        requested_patchset = self.selection.filter_patch_dictionary(requested_patchset)
         root_state = RootPatchStateEvaluator(self.constants).evaluate(requested_patchset)
-        no_new_patches = root_state.state == RootPatchState.INSTALLED_SAME
-        root_state_blocks_patch = root_state.patch_allowed is False
 
         if not patches:
             # Prompt user with no patches found
@@ -124,38 +146,27 @@ class SysPatchDisplayFrame(wx.Frame):
         else:
             # Add Label for each patch
             i = 0
-            if no_new_patches is True:
-                patch_label = wx.StaticText(frame, label="All applicable patches already installed", pos=(-1, available_label.GetPosition()[1] + 20))
-                patch_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
+            longest_patch = ""
+            for patch in patches:
+                if (not patch.startswith("Settings") and not patch.startswith("Validation") and patches[patch] is True):
+                    if len(patch) > len(longest_patch):
+                        longest_patch = patch
+            anchor = wx.StaticText(frame, label=longest_patch, pos=(-1, available_label.GetPosition()[1] + 20))
+            anchor.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
+            anchor.Centre(wx.HORIZONTAL)
+            anchor.Hide()
+
+            logging.info("Available patches:")
+            for patch in patches:
+                if (not patch.startswith("Settings") and not patch.startswith("Validation") and patches[patch] is True):
+                    i = i + 20
+                    logging.info(f"- {patch}")
+                    patch_label = wx.StaticText(frame, label=f"- {patch}", pos=(anchor.GetPosition()[0], available_label.GetPosition()[1] + i))
+                    patch_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
+
+            if i == 20:
+                patch_label.SetLabel(patch_label.GetLabel().replace("-", ""))
                 patch_label.Centre(wx.HORIZONTAL)
-                i = i + 20
-            else:
-                longest_patch = ""
-                for patch in patches:
-                    if (not patch.startswith("Settings") and not patch.startswith("Validation") and patches[patch] is True):
-                        if len(patch) > len(longest_patch):
-                            longest_patch = patch
-                anchor = wx.StaticText(frame, label=longest_patch, pos=(-1, available_label.GetPosition()[1] + 20))
-                anchor.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
-                anchor.Centre(wx.HORIZONTAL)
-                anchor.Hide()
-
-                logging.info("Available patches:")
-                for patch in patches:
-                    if (not patch.startswith("Settings") and not patch.startswith("Validation") and patches[patch] is True):
-                        i = i + 20
-                        logging.info(f"- {patch}")
-                        patch_label = wx.StaticText(frame, label=f"- {patch}", pos=(anchor.GetPosition()[0], available_label.GetPosition()[1] + i))
-                        patch_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
-
-                if i == 20:
-                    patch_label.SetLabel(patch_label.GetLabel().replace("-", ""))
-                    patch_label.Centre(wx.HORIZONTAL)
-
-            if root_state_blocks_patch and no_new_patches is False:
-                available_label.SetLabel(root_state.reason)
-                available_label.Wrap(330)
-                available_label.Centre(wx.HORIZONTAL)
 
             if patches[HardwarePatchsetValidation.PATCHING_NOT_POSSIBLE] is True:
                 # Cannot patch due to the following reasons:
@@ -212,17 +223,50 @@ class SysPatchDisplayFrame(wx.Frame):
                     patch_label.Centre(wx.HORIZONTAL)
 
 
+        selection_title = wx.StaticText(frame, label="Root Patch Selection", pos=(-1, patch_label.GetPosition().y + 25))
+        selection_title.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_BOLD))
+        selection_title.Centre(wx.HORIZONTAL)
+
+        selection_y = selection_title.GetPosition().y + 23
+        for definition in SELECTABLE_ROOT_PATCHES:
+            if self.selection.is_applicable(definition.identifier) is False:
+                continue
+            checkbox = wx.CheckBox(frame, label=definition.display_name, pos=(55, selection_y))
+            checkbox.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
+            checkbox.SetToolTip(definition.description)
+            checkbox.SetValue(self.selection.is_selected(definition.identifier))
+            checkbox.Bind(
+                wx.EVT_CHECKBOX,
+                lambda event, identifier=definition.identifier: self.on_patch_selection_changed(
+                    identifier,
+                    event.IsChecked(),
+                ),
+            )
+            self.selection_checkboxes[definition.identifier] = checkbox
+            selection_y += 23
+
+        self.selection_summary = wx.StaticText(frame, label="", pos=(-1, selection_y + 2))
+        self.selection_summary.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_BOLD))
+        self.selection_summary.Centre(wx.HORIZONTAL)
+
+        self.selection_state_label = wx.StaticText(frame, label="", pos=(-1, self.selection_summary.GetPosition().y + 22))
+        self.selection_state_label.SetFont(gui_support.font_factory(12, wx.FONTWEIGHT_NORMAL))
+        self.selection_state_label.Wrap(330)
+        self.selection_state_label.Centre(wx.HORIZONTAL)
+
         # Button: Start Root Patching
-        start_button = wx.Button(frame, label="Start Root Patching", pos=(10, patch_label.GetPosition().y + 25), size=(170, 30))
-        start_button.Bind(wx.EVT_BUTTON, lambda event: self.on_start_root_patching(patches))
+        start_button = wx.Button(frame, label="Start Root Patching", pos=(10, self.selection_state_label.GetPosition().y + 38), size=(170, 30))
+        start_button.Bind(wx.EVT_BUTTON, self.on_start_root_patching)
         start_button.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
         start_button.Centre(wx.HORIZONTAL)
+        self.start_button = start_button
 
         # Button: Revert Root Patches
         revert_button = wx.Button(frame, label="Revert Root Patches", pos=(10, start_button.GetPosition().y + start_button.GetSize().height - 5), size=(170, 30))
-        revert_button.Bind(wx.EVT_BUTTON, lambda event: self.on_revert_root_patching(patches))
+        revert_button.Bind(wx.EVT_BUTTON, self.on_revert_root_patching)
         revert_button.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
         revert_button.Centre(wx.HORIZONTAL)
+        self.revert_button = revert_button
 
         # Button: Return to Main Menu
         return_button = wx.Button(frame, label="Return to Main Menu", pos=(10, revert_button.GetPosition().y + revert_button.GetSize().height), size=(150, 30))
@@ -231,39 +275,89 @@ class SysPatchDisplayFrame(wx.Frame):
         return_button.Centre(wx.HORIZONTAL)
         self.return_button = return_button
 
-        # Disable buttons if unsupported
-        if not patches:
-            start_button.Disable()
-        else:
-            self.available_patches = True
-            if patches[HardwarePatchsetValidation.PATCHING_NOT_POSSIBLE] is True or root_state_blocks_patch:
-                self.available_patches = False
-                start_button.Disable()
-            elif no_new_patches is False:
-                start_button.SetDefault()
-            else:
-                self.available_patches = False
-                start_button.Disable()
-        if root_state.revert_allowed(can_unpatch) is False:
-            revert_button.Disable()
+        self.current_detection = detection
+        self.requested_patchset = requested_patchset
+        self.root_state = root_state
+        self._refresh_selection_state()
 
         # Set frame size
         frame.SetSize((-1, return_button.GetPosition().y + return_button.GetSize().height + 15))
         frame.ShowWindowModal()
 
 
-    def on_start_root_patching(self, patches: dict):
+    def _applicable_patchsets(self, detection: HardwarePatchsetDetection) -> tuple[str, ...]:
+        return tuple(
+            patch
+            for patch, enabled in detection.device_properties.items()
+            if not patch.startswith("Settings") and not patch.startswith("Validation") and enabled is True
+        )
+
+
+    def _refresh_selection_state(self) -> None:
         detection = HardwarePatchsetDetection(constants=self.constants)
-        root_state = RootPatchStateEvaluator(self.constants).evaluate(detection.patches)
-        if root_state.patch_allowed is False:
-            logging.error(root_state.reason)
-            wx.MessageBox(root_state.reason, "Root Patching Blocked", wx.OK | wx.ICON_WARNING)
+        self.selection = self.selection.constrained_to(self._applicable_patchsets(detection))
+        requested_patchset = self.selection.filter_patch_dictionary(detection.patches)
+        root_state = RootPatchStateEvaluator(self.constants).evaluate(requested_patchset)
+
+        self.current_detection = detection
+        self.requested_patchset = requested_patchset
+        self.root_state = root_state
+
+        for identifier, checkbox in self.selection_checkboxes.items():
+            checkbox.SetValue(self.selection.is_selected(identifier))
+
+        selected_names = self.selection.display_names()
+        selected_label = " + ".join(selected_names) if selected_names else "None"
+        self.selection_summary.SetLabel(f"Selected: {selected_label}")
+        self.selection_summary.Centre(wx.HORIZONTAL)
+
+        if not requested_patchset:
+            status = "Select at least one applicable root patch."
+        elif root_state.state != RootPatchState.CLEAN:
+            status = root_state.reason
+        elif detection.can_patch is False:
+            status = "The selected root patches cannot be applied with the current system requirements."
+        else:
+            status = "Ready to apply the selected root patches."
+        self.selection_state_label.SetLabel(status)
+        self.selection_state_label.Wrap(330)
+        self.selection_state_label.Centre(wx.HORIZONTAL)
+
+        start_allowed = bool(requested_patchset) and detection.can_patch and root_state.patch_allowed
+        self.start_button.Enable(start_allowed)
+        if start_allowed:
+            self.start_button.SetDefault()
+        self.revert_button.Enable(root_state.revert_allowed(detection.can_unpatch))
+        self.available_patches = start_allowed
+
+
+    def on_patch_selection_changed(self, identifier: SelectableRootPatch, selected: bool) -> None:
+        self.selection = self.selection.with_selection(identifier, selected)
+        self._refresh_selection_state()
+        self.frame_modal.Layout()
+
+
+    def on_start_root_patching(self, event: wx.Event = None):
+        self._refresh_selection_state()
+        if not self.requested_patchset:
+            wx.MessageBox("Select at least one applicable root patch.", "Root Patching Blocked", wx.OK | wx.ICON_WARNING)
+            return
+        if self.current_detection.can_patch is False:
+            wx.MessageBox(
+                "The selected root patches cannot be applied with the current system requirements.",
+                "Root Patching Blocked",
+                wx.OK | wx.ICON_WARNING,
+            )
+            return
+        if self.root_state.patch_allowed is False:
+            logging.error(self.root_state.reason)
+            wx.MessageBox(self.root_state.reason, "Root Patching Blocked", wx.OK | wx.ICON_WARNING)
             return
         frame = gui_sys_patch_start.SysPatchStartFrame(
             parent=None,
             title=self.title,
             global_constants=self.constants,
-            patches=patches,
+            patches=self.current_detection.device_properties,
         )
         self.frame_modal.Hide()
         self.frame_modal.Destroy()
@@ -272,18 +366,17 @@ class SysPatchDisplayFrame(wx.Frame):
         frame.start_root_patching()
 
 
-    def on_revert_root_patching(self, patches: dict):
-        detection = HardwarePatchsetDetection(constants=self.constants)
-        root_state = RootPatchStateEvaluator(self.constants).evaluate(detection.patches)
-        if root_state.revert_allowed(detection.can_unpatch) is False:
-            logging.error(root_state.reason)
-            wx.MessageBox(root_state.reason, "Root Patch Reversion Unavailable", wx.OK | wx.ICON_WARNING)
+    def on_revert_root_patching(self, event: wx.Event = None):
+        self._refresh_selection_state()
+        if self.root_state.revert_allowed(self.current_detection.can_unpatch) is False:
+            logging.error(self.root_state.reason)
+            wx.MessageBox(self.root_state.reason, "Root Patch Reversion Unavailable", wx.OK | wx.ICON_WARNING)
             return
         frame = gui_sys_patch_start.SysPatchStartFrame(
             parent=None,
             title=self.title,
             global_constants=self.constants,
-            patches=patches,
+            patches=self.current_detection.device_properties,
         )
         self.frame_modal.Hide()
         self.frame_modal.Destroy()
