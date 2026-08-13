@@ -63,6 +63,7 @@ from ...detections import (
     device_probe
 )
 from ..root_state import ROOT_PATCH_METADATA_PATH
+from ..root_selection import RootPatchSelection
 
 
 class HardwarePatchsetSettings(StrEnum):
@@ -98,7 +99,8 @@ class HardwarePatchsetDetection:
     def __init__(self, constants: constants.Constants,
                  xnu_major: int = None, xnu_minor:  int = None,
                  os_build:  str = None, os_version: str = None,
-                 validation: bool = False # Whether to run validation checks
+                 validation: bool = False, # Whether to run validation checks
+                 patch_selection: RootPatchSelection = None,
                  ) -> None:
         self._constants = constants
 
@@ -107,6 +109,7 @@ class HardwarePatchsetDetection:
         self._os_build   = os_build   or self._constants.detected_os_build
         self._os_version = os_version or self._constants.detected_os_version
         self._validation = validation
+        self._patch_selection = patch_selection
 
         self._hardware_variants = [
             #intel_iron_lake.IntelIronLake,
@@ -143,6 +146,7 @@ class HardwarePatchsetDetection:
 
         self.device_properties = None
         self.patches           = None
+        self.applicable_patchsets: tuple[str, ...] = ()
 
         self.can_patch         = False
         self.can_unpatch       = False
@@ -465,6 +469,8 @@ class HardwarePatchsetDetection:
         if self._validation is False:
             present_hardware = self._strip_incompatible_hardware(present_hardware)
 
+        self.applicable_patchsets = tuple(item.name() for item in present_hardware)
+
         # Second pass to determine requirements
         for item in present_hardware:
             item: BaseHardware
@@ -524,6 +530,10 @@ class HardwarePatchsetDetection:
             item: BaseHardware
             if item.name() not in device_properties:
                 continue
+            if self._patch_selection is not None:
+                if self._patch_selection.is_hardware_patchset_selected(item.name()) is False:
+                    device_properties.pop(item.name(), None)
+                    continue
             patches.update(item.patches())
 
         _cant_patch = not self._can_patch(requirements)

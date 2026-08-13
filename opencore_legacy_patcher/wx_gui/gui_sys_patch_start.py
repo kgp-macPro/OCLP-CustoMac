@@ -28,6 +28,8 @@ from ..wx_gui import (
 )
 
 from ..sys_patch.patchsets import HardwarePatchsetDetection, HardwarePatchsetSettings
+from ..sys_patch.root_selection import RootPatchSelection
+from ..sys_patch.root_state import RootPatchStateEvaluator, semantic_patch_selection
 
 
 
@@ -36,7 +38,16 @@ class SysPatchStartFrame(wx.Frame):
     Create a frame for root patching
     Uses a Modal Dialog for smoother transition from other frames
     """
-    def __init__(self, parent: wx.Frame, title: str, global_constants: constants.Constants, screen_location: tuple = None, patches: dict = {}):
+    def __init__(
+        self,
+        parent: wx.Frame,
+        title: str,
+        global_constants: constants.Constants,
+        screen_location: tuple = None,
+        patches: dict = None,
+        patch_selection: RootPatchSelection = None,
+        expected_patch_selection: tuple[str, ...] = None,
+    ):
         logging.info("Initializing Root Patching Frame")
 
         self.title = title
@@ -44,14 +55,60 @@ class SysPatchStartFrame(wx.Frame):
         self.frame_modal: wx.Dialog = None
         self.return_button: wx.Button = None
         self.available_patches: bool = False
-        self.patches: dict = patches
+        self.patches: dict = patches or {}
+        self.patch_selection = patch_selection
+        self.expected_patch_selection = expected_patch_selection
 
         super(SysPatchStartFrame, self).__init__(parent, title=title, size=(350, 200), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
         gui_support.GenerateMenubar(self, self.constants).generate()
         self.Centre()
 
-        if self.patches == {}:
-            self.patches = HardwarePatchsetDetection(constants=self.constants).device_properties
+        applicability = HardwarePatchsetDetection(constants=self.constants)
+        if self.patch_selection is None:
+            bootstrap_state = RootPatchStateEvaluator(self.constants).evaluate(applicability.patches)
+            self.patch_selection = RootPatchSelection.initialize(
+                applicability.applicable_patchsets,
+                bootstrap_state.installed_selection,
+            )
+        selected_detection = HardwarePatchsetDetection(
+            constants=self.constants,
+            patch_selection=self.patch_selection,
+        )
+        self.patch_selection = self.patch_selection.constrained_to(selected_detection.applicable_patchsets)
+        self.patches = selected_detection.device_properties
+        if self.expected_patch_selection is None:
+            self.expected_patch_selection = semantic_patch_selection(selected_detection.patches)
+
+
+    def _revalidate_patch_selection(self) -> HardwarePatchsetDetection | None:
+        detection = HardwarePatchsetDetection(
+            constants=self.constants,
+            patch_selection=self.patch_selection,
+        )
+        actual_selection = semantic_patch_selection(detection.patches)
+        if not actual_selection:
+            wx.MessageBox("Select at least one applicable root patch.", "Root Patching Blocked", wx.OK | wx.ICON_WARNING)
+            return None
+        if actual_selection != self.expected_patch_selection:
+            wx.MessageBox(
+                "Root patch applicability or selection changed. Return to Root Patch Selection and review the current request.",
+                "Root Patching Blocked",
+                wx.OK | wx.ICON_WARNING,
+            )
+            return None
+        root_state = RootPatchStateEvaluator(self.constants).evaluate(detection.patches)
+        if root_state.patch_allowed is False:
+            wx.MessageBox(root_state.reason, "Root Patching Blocked", wx.OK | wx.ICON_WARNING)
+            return None
+        if detection.can_patch is False:
+            wx.MessageBox(
+                "The selected root patches cannot be applied with the current system requirements.",
+                "Root Patching Blocked",
+                wx.OK | wx.ICON_WARNING,
+            )
+            return None
+        self.patches = detection.device_properties
+        return detection
 
 
     def _kdk_download(self, frame: wx.Frame = None) -> bool:
@@ -306,9 +363,15 @@ class SysPatchStartFrame(wx.Frame):
     def start_root_patching(self):
         logging.info("Starting root patching")
 
+        if self._revalidate_patch_selection() is None:
+            return
+
         while gui_support.PayloadMount(self.constants, self).is_unpack_finished() is False:
             wx.Yield()
             time.sleep(self.constants.thread_sleep_interval)
+
+        if self._revalidate_patch_selection() is None:
+            return
 
         if self.patches[HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED] is True:
             if self._kdk_download(self) is False:
@@ -334,7 +397,13 @@ class SysPatchStartFrame(wx.Frame):
         logger = logging.getLogger()
         logger.addHandler(gui_support.ThreadHandler(self.text_box))
         try:
-            sys_patch.PatchSysVolume(self.constants.computer.real_model, self.constants, patches).start_patch()
+            sys_patch.PatchSysVolume(
+                self.constants.computer.real_model,
+                self.constants,
+                patches,
+                patch_selection=self.patch_selection,
+                expected_patch_selection=self.expected_patch_selection,
+            ).start_patch()
         except:
             logging.error("An internal error occurred while running the Root Patcher:\n")
             logging.error(traceback.format_exc())

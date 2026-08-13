@@ -15,6 +15,7 @@ from ..sys_patch.root_selection import (
     SelectableRootPatch,
 )
 from ..sys_patch.root_state import RootPatchStateEvaluator, RootPatchState
+from ..sys_patch.root_state import semantic_patch_selection
 
 from ..wx_gui import (
     gui_main_menu,
@@ -124,11 +125,7 @@ class SysPatchDisplayFrame(wx.Frame):
             logging.info("No applicable patches available")
             patches = {}
 
-        applicable_patchsets = tuple(
-            patch
-            for patch, enabled in patches.items()
-            if not patch.startswith("Settings") and not patch.startswith("Validation") and enabled is True
-        )
+        applicable_patchsets = detection.applicable_patchsets
         bootstrap_state = RootPatchStateEvaluator(self.constants).evaluate(requested_patchset)
         self.selection = RootPatchSelection.initialize(
             applicable_patchsets,
@@ -286,17 +283,13 @@ class SysPatchDisplayFrame(wx.Frame):
 
 
     def _applicable_patchsets(self, detection: HardwarePatchsetDetection) -> tuple[str, ...]:
-        return tuple(
-            patch
-            for patch, enabled in detection.device_properties.items()
-            if not patch.startswith("Settings") and not patch.startswith("Validation") and enabled is True
-        )
+        return detection.applicable_patchsets
 
 
     def _refresh_selection_state(self) -> None:
-        detection = HardwarePatchsetDetection(constants=self.constants)
+        detection = HardwarePatchsetDetection(constants=self.constants, patch_selection=self.selection)
         self.selection = self.selection.constrained_to(self._applicable_patchsets(detection))
-        requested_patchset = self.selection.filter_patch_dictionary(detection.patches)
+        requested_patchset = detection.patches
         root_state = RootPatchStateEvaluator(self.constants).evaluate(requested_patchset)
 
         self.current_detection = detection
@@ -358,6 +351,8 @@ class SysPatchDisplayFrame(wx.Frame):
             title=self.title,
             global_constants=self.constants,
             patches=self.current_detection.device_properties,
+            patch_selection=self.selection,
+            expected_patch_selection=semantic_patch_selection(self.requested_patchset),
         )
         self.frame_modal.Hide()
         self.frame_modal.Destroy()
@@ -377,6 +372,7 @@ class SysPatchDisplayFrame(wx.Frame):
             title=self.title,
             global_constants=self.constants,
             patches=self.current_detection.device_properties,
+            patch_selection=self.selection,
         )
         self.frame_modal.Hide()
         self.frame_modal.Destroy()

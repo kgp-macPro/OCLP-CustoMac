@@ -76,11 +76,19 @@ from . import (
     kernelcache
 )
 from .auto_patcher import InstallAutomaticPatchingServices
-from .root_state import ROOT_PATCH_METADATA_FILENAME, RootPatchStateEvaluator
+from .root_selection import RootPatchSelection
+from .root_state import ROOT_PATCH_METADATA_FILENAME, RootPatchStateEvaluator, semantic_patch_selection
 
 
 class PatchSysVolume:
-    def __init__(self, model: str, global_constants: constants.Constants, hardware_details: list = None) -> None:
+    def __init__(
+        self,
+        model: str,
+        global_constants: constants.Constants,
+        hardware_details: dict = None,
+        patch_selection: RootPatchSelection = None,
+        expected_patch_selection: tuple[str, ...] = None,
+    ) -> None:
         self.model = model
         self.constants: constants.Constants = global_constants
         self.computer = self.constants.computer
@@ -88,23 +96,41 @@ class PatchSysVolume:
         self.constants.root_patcher_succeeded = False # Reset Variable each time we start
         self.constants.needs_to_open_preferences = False
         self.patch_set_dictionary = {}
+        self.patch_selection = patch_selection
+        self.expected_patch_selection = expected_patch_selection
         self.needs_kmutil_exemptions = False # For '/Library/Extensions' rebuilds
         self.kdk_path = None
         self.metallib_path = None
 
         # GUI will detect hardware patches before starting PatchSysVolume()
         # However the TUI will not, so allow for data to be passed in manually avoiding multiple calls
+        if self.patch_selection is None:
+            applicability = HardwarePatchsetDetection(self.constants)
+            bootstrap_state = RootPatchStateEvaluator(self.constants).evaluate(applicability.patches)
+            self.patch_selection = RootPatchSelection.initialize(
+                applicability.applicable_patchsets,
+                bootstrap_state.installed_selection,
+            )
+        selected_detection = HardwarePatchsetDetection(
+            self.constants,
+            patch_selection=self.patch_selection,
+        )
+        self.patch_selection = self.patch_selection.constrained_to(selected_detection.applicable_patchsets)
+        if self.expected_patch_selection is None:
+            self.expected_patch_selection = semantic_patch_selection(selected_detection.patches)
         if hardware_details is None:
-            hardware_details = HardwarePatchsetDetection(self.constants).device_properties
-        self.hardware_details = hardware_details
+            hardware_details = selected_detection.device_properties
+        self._apply_hardware_details(hardware_details)
         self._init_pathing()
 
-        self.skip_root_kmutil_requirement = not self.hardware_details[HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED] if self.constants.detected_os >= os_data.os_data.ventura else False
+        self.mount_obj = RootVolumeMount(self.constants.detected_os)
 
+
+    def _apply_hardware_details(self, hardware_details: dict) -> None:
+        self.hardware_details = hardware_details
+        self.skip_root_kmutil_requirement = not self.hardware_details[HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED] if self.constants.detected_os >= os_data.os_data.ventura else False
         self.requires_kdk_caching      = self.hardware_details[HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED] and self.constants.detected_os >= os_data.os_data.ventura
         self.requires_metallib_caching = self.hardware_details[HardwarePatchsetSettings.METALLIB_SUPPORT_PKG_REQUIRED] and self.constants.detected_os >= os_data.os_data.sequoia
-
-        self.mount_obj = RootVolumeMount(self.constants.detected_os)
 
 
     def _init_pathing(self) -> None:
@@ -553,11 +579,20 @@ class PatchSysVolume:
 
         logging.info("- Starting Patch Process")
         logging.info(f"- Determining Required Patch set for Darwin {self.constants.detected_os}")
-        patchset_obj = HardwarePatchsetDetection(self.constants)
+        patchset_obj = HardwarePatchsetDetection(
+            self.constants,
+            patch_selection=getattr(self, "patch_selection", None),
+        )
         self.patch_set_dictionary = patchset_obj.patches
 
         if self.patch_set_dictionary == {}:
             logging.info("- No Root Patches required for your machine!")
+            return
+
+        actual_patch_selection = semantic_patch_selection(self.patch_set_dictionary)
+        expected_patch_selection = getattr(self, "expected_patch_selection", None)
+        if expected_patch_selection is not None and actual_patch_selection != expected_patch_selection:
+            logging.error("- Root patch operation blocked: applicability or requested selection changed")
             return
 
         root_state = RootPatchStateEvaluator(self.constants).evaluate(self.patch_set_dictionary)
@@ -570,6 +605,8 @@ class PatchSysVolume:
             logging.error("- Cannot continue with patching!!!")
             patchset_obj.detailed_errors()
             return
+
+        self._apply_hardware_details(patchset_obj.device_properties)
 
         logging.info("- Patcher is capable of patching")
         if PatcherSupportPkgMount(self.constants).mount() is False:
@@ -595,7 +632,10 @@ class PatchSysVolume:
         """
 
         logging.info("- Starting Unpatch Process")
-        patchset_obj = HardwarePatchsetDetection(self.constants)
+        patchset_obj = HardwarePatchsetDetection(
+            self.constants,
+            patch_selection=getattr(self, "patch_selection", None),
+        )
         if patchset_obj.can_unpatch is False:
             logging.error("- Cannot continue with unpatching!!!")
             patchset_obj.detailed_errors()
