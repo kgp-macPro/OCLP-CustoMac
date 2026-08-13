@@ -17,6 +17,7 @@ class Constants:
         self.patcher_support_pkg_version:     str = "2.0.0-tahoe-restored.1"  # PatcherSupportPkg
         self.copyright_date:                  str = "Copyright © 2020-2025 Dortania"
         self.patcher_name:                    str = "OpenCore Legacy Patcher"
+        self.project_identity:                str = "OCLP 3.0.0 Nightly - amfipassbeta Edition v2.0"
 
         # URLs
         self.url_patcher_support_pkg:         str = "https://github.com/kgp-macPro/PatcherSupportPkg-laobamac/releases/download/"
@@ -157,7 +158,7 @@ class Constants:
         self.log_filepath:              Path = None  #  Path to log file
         self.thread_sleep_interval:    float = 0.01  #  Sleep interval between UI updates (seconds) - balance between UI responsiveness and CPU usage
 
-        self.commit_info: tuple = (None, None, None)  # Commit info (Branch, Commit Date, Commit URL)
+        self.commit_info: tuple = (None, None, None, None, None, None)  # Ref, date, URL, full SHA, repository, project
 
         ## Hardware
         self.computer: device_probe.Computer = None  # type: ignore

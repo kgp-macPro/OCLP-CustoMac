@@ -4,14 +4,12 @@ gui_sys_patch_display.py: Display root patching menu
 
 import wx
 import logging
-import plistlib
 import threading
-
-from pathlib import Path
 
 from .. import constants
 
 from ..sys_patch.patchsets import HardwarePatchsetDetection, HardwarePatchsetValidation
+from ..sys_patch.root_state import RootPatchStateEvaluator, RootPatchState
 
 from ..wx_gui import (
     gui_main_menu,
@@ -84,9 +82,12 @@ class SysPatchDisplayFrame(wx.Frame):
 
         # Labels: {patch name}
         patches: dict = {}
+        requested_patchset: dict = {}
         def _fetch_patches(self) -> None:
-            nonlocal patches
-            patches = HardwarePatchsetDetection(constants=self.constants).device_properties
+            nonlocal patches, requested_patchset
+            detection = HardwarePatchsetDetection(constants=self.constants)
+            patches = detection.device_properties
+            requested_patchset = detection.patches
 
         thread = threading.Thread(target=_fetch_patches, args=(self,))
         thread.start()
@@ -110,8 +111,8 @@ class SysPatchDisplayFrame(wx.Frame):
             logging.info("No applicable patches available")
             patches = {}
 
-        # Check if OCLP has already applied the same patches
-        no_new_patches = not self._check_if_new_patches_needed(patches) if patches else False
+        root_state = RootPatchStateEvaluator(self.constants).evaluate(requested_patchset)
+        no_new_patches = root_state.state == RootPatchState.INSTALLED_SAME
 
         if not patches:
             # Prompt user with no patches found
@@ -235,6 +236,7 @@ class SysPatchDisplayFrame(wx.Frame):
                 start_button.SetDefault()
             else:
                 self.available_patches = False
+                start_button.Disable()
         if can_unpatch is False:
             revert_button.Disable()
 
@@ -244,6 +246,12 @@ class SysPatchDisplayFrame(wx.Frame):
 
 
     def on_start_root_patching(self, patches: dict):
+        detection = HardwarePatchsetDetection(constants=self.constants)
+        root_state = RootPatchStateEvaluator(self.constants).evaluate(detection.patches)
+        if root_state.patch_allowed is False:
+            logging.error(root_state.reason)
+            wx.MessageBox(root_state.reason, "Root Patching Blocked", wx.OK | wx.ICON_WARNING)
+            return
         frame = gui_sys_patch_start.SysPatchStartFrame(
             parent=None,
             title=self.title,
@@ -290,38 +298,3 @@ class SysPatchDisplayFrame(wx.Frame):
     def on_return_dismiss(self, event: wx.Event = None):
         self.frame_modal.Hide()
         self.frame_modal.Destroy()
-
-
-    def _check_if_new_patches_needed(self, patches: dict) -> bool:
-        """
-        Checks if any new patches are needed for the user to install
-        Newer users will assume the root patch menu will present missing patches.
-        Thus we'll need to see if the exact same OCLP build was used already
-        """
-
-        logging.info("Checking if new patches are needed")
-
-        if self.constants.commit_info[0] in ["Running from source", "Built from source"]:
-            return True
-
-        if self.constants.computer.oclp_sys_url != self.constants.commit_info[2]:
-            # If commits are different, assume patches are as well
-            return True
-
-        oclp_plist = "/System/Library/CoreServices/OpenCore-Legacy-Patcher.plist"
-        if not Path(oclp_plist).exists():
-            # If it doesn't exist, no patches were ever installed
-            # ie. all patches applicable
-            return True
-
-        oclp_plist_data = plistlib.load(open(oclp_plist, "rb"))
-        for patch in patches:
-            if (not patch.startswith("Settings") and not patch.startswith("Validation") and patches[patch] is True):
-                # Patches should share the same name as the plist key
-                # See sys_patch/patchsets/base.py for more info
-                if patch.split(": ")[1] not in oclp_plist_data:
-                    logging.info(f"- Patch {patch} not installed")
-                    return True
-
-        logging.info("No new patches detected for system")
-        return False

@@ -36,7 +36,7 @@ class ParseCommitInfo:
         Generate commit info from Info.plist
 
         Returns:
-            tuple: (Branch, Commit Date, Commit URL)
+            tuple: (Branch, Commit Date, Commit URL, Commit SHA, Repository, Project)
         """
 
         if self.plist_path:
@@ -46,9 +46,15 @@ class ParseCommitInfo:
                     plist_info["Github"]["Branch"],
                     plist_info["Github"]["Commit Date"],
                     plist_info["Github"]["Commit URL"],
+                    plist_info["Github"]["Commit SHA"],
+                    plist_info["Github"]["Repository"],
+                    plist_info["Github"]["Project"],
                 )
         return (
             "Running from source",
             "Not applicable",
             "",
+            "",
+            "",
+            "Running from source",
         )

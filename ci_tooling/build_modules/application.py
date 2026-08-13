@@ -1,6 +1,4 @@
-import os
 import sys
-import time
 import plistlib
 import subprocess
 
@@ -8,6 +6,7 @@ from pathlib import Path
 
 from opencore_legacy_patcher.volume  import generate_copy_arguments
 from opencore_legacy_patcher.support import subprocess_wrapper
+from ci_tooling.build_metadata import SourceBuildMetadata
 
 
 class GenerateApplication:
@@ -27,6 +26,7 @@ class GenerateApplication:
         self._git_branch = git_branch
         self._git_commit_url = git_commit_url
         self._git_commit_date = git_commit_date
+        self._source_metadata: SourceBuildMetadata | None = None
 
         self._analytics_key = analytics_key
         self._analytics_endpoint = analytics_endpoint
@@ -158,21 +158,19 @@ class GenerateApplication:
         """
         _file = self._application_output / "Contents" / "Info.plist"
 
-        _git_branch = self._git_branch or "Built from source"
-        _git_commit = self._git_commit_url or ""
-        _git_commit_date = self._git_commit_date
-        if not _git_commit_date:
-            _git_commit_date = time.strftime(
-                "%Y-%m-%d %H:%M:%S UTC",
-                time.gmtime(int(os.environ["SOURCE_DATE_EPOCH"]))
-            )
+        if self._source_metadata is None:
+            raise RuntimeError("Source build metadata was not validated")
 
         print("Embedding git data")
         _plist = plistlib.load(_file.open("rb"))
         _plist["Github"] = {
-            "Branch": _git_branch,
-            "Commit URL": _git_commit,
-            "Commit Date": _git_commit_date
+            "Branch": self._source_metadata.ref,
+            "Commit SHA": self._source_metadata.commit_sha,
+            "Commit URL": self._source_metadata.commit_url,
+            "Commit Date": self._source_metadata.commit_date,
+            "Repository": self._source_metadata.repository_url,
+            "Project": "OCLP 3.0.0 Nightly - amfipassbeta Edition v2.0",
+            "Version": _plist["CFBundleShortVersionString"],
         }
         plistlib.dump(_plist, _file.open("wb"), sort_keys=True)
 
@@ -215,6 +213,12 @@ class GenerateApplication:
         """
         Generate OpenCore-Patcher.app
         """
+        self._source_metadata = SourceBuildMetadata.from_repository(
+            Path.cwd(),
+            ref=self._git_branch,
+            commit_url=self._git_commit_url,
+            commit_date=self._git_commit_date,
+        )
         self._embed_analytics_key()
         self._generate_application()
         self._remove_analytics_key()

@@ -20,8 +20,6 @@ jobs:
 
       # GitHub Information
       branch: ${{ github.ref }}
-      commiturl: ${{ github.event.head_commit.url }}${{ github.event.release.html_url }}
-      commitdate: ${{ github.event.head_commit.timestamp }}${{ github.event.release.published_at }}
 
       # Analytics
       #ANALYTICS_KEY: ${{ secrets.ANALYTICS_KEY }}
@@ -80,7 +78,7 @@ jobs:
       - name: Prepare Application (--prepare-application)
         run: >
           .venv-build/bin/python Build-Project.command
-          --git-branch "${{ env.branch }}" --git-commit-url "${{ env.commiturl }}" --git-commit-date "${{ env.commitdate }}"
+          --git-branch "${{ env.branch }}"
           --reset-pyinstaller-cache
           --run-as-individual-steps
           --prepare-application

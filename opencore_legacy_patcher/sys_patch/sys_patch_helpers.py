@@ -103,10 +103,16 @@ class SysPatchHelpers:
             metallib_used_string = metallib_used
 
         data = {
+            "Metadata Schema": "KGP-Root-Patch-State-v1",
+            "Project Identity": self.constants.project_identity,
             "OpenCore Legacy Patcher": f"v{self.constants.patcher_version}",
             "PatcherSupportPkg": f"v{self.constants.patcher_support_pkg_version}",
             "Time Patched": f"{datetime.now().strftime('%B %d, %Y @ %H:%M:%S')}",
             "Commit URL": f"{self.constants.commit_info[2]}",
+            "Commit SHA": f"{self.constants.commit_info[3]}",
+            "Commit Ref": f"{self.constants.commit_info[0]}",
+            "Repository": f"{self.constants.commit_info[4]}",
+            "Installed Patches": sorted(str(key) for key in patchset),
             "Kernel Debug Kit Used": f"{kdk_string}",
             "Metal Library Used": f"{metallib_used_string}",
             "OS Version": f"{self.constants.detected_os}.{self.constants.detected_os_minor} ({self.constants.detected_os_build})",

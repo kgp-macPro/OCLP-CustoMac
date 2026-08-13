@@ -76,6 +76,7 @@ from . import (
     kernelcache
 )
 from .auto_patcher import InstallAutomaticPatchingServices
+from .root_state import RootPatchStateEvaluator
 
 
 class PatchSysVolume:
@@ -556,6 +557,11 @@ class PatchSysVolume:
 
         if self.patch_set_dictionary == {}:
             logging.info("- No Root Patches required for your machine!")
+            return
+
+        root_state = RootPatchStateEvaluator(self.constants).evaluate(self.patch_set_dictionary)
+        if root_state.patch_allowed is False:
+            logging.error(f"- Root patch operation blocked: {root_state.reason}")
             return
 
         logging.info("- Verifying whether Root Patching possible")
