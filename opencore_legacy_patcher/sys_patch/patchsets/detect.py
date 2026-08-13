@@ -470,9 +470,17 @@ class HardwarePatchsetDetection:
             present_hardware = self._strip_incompatible_hardware(present_hardware)
 
         self.applicable_patchsets = tuple(item.name() for item in present_hardware)
+        selected_hardware = [
+            item
+            for item in present_hardware
+            if (
+                self._patch_selection is None
+                or self._patch_selection.is_hardware_patchset_selected(item.name())
+            )
+        ]
 
         # Second pass to determine requirements
-        for item in present_hardware:
+        for item in selected_hardware:
             item: BaseHardware
             device_properties[item.name()] = True
 
@@ -526,14 +534,10 @@ class HardwarePatchsetDetection:
                 requirements, device_properties = self._handle_missing_network_connection(requirements, device_properties)
 
         # Third pass to sync stripped hardware (ie. '_handle_missing_network_connection()')
-        for item in present_hardware:
+        for item in selected_hardware:
             item: BaseHardware
             if item.name() not in device_properties:
                 continue
-            if self._patch_selection is not None:
-                if self._patch_selection.is_hardware_patchset_selected(item.name()) is False:
-                    device_properties.pop(item.name(), None)
-                    continue
             patches.update(item.patches())
 
         _cant_patch = not self._can_patch(requirements)
