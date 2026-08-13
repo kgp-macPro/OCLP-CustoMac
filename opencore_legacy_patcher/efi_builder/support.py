@@ -123,7 +123,7 @@ class BuildSupport:
         """
 
         logging.info("- Validating generated config")
-        if not Path(self.constants.opencore_release_folder / Path("EFI/OC/config.plist")):
+        if not Path(self.constants.opencore_release_folder / Path("EFI/OC/config.plist")).exists():
             logging.info("- OpenCore config file missing!!!")
             raise Exception("OpenCore config file missing")
 

@@ -106,4 +106,3 @@ class SourceBuildMetadata:
         actual_date = _git(repository, "show", "-s", "--format=%cI", "HEAD")
         if self.commit_date != actual_date:
             raise RuntimeError(f"Commit date {self.commit_date!r} does not match HEAD date {actual_date!r}")
-
