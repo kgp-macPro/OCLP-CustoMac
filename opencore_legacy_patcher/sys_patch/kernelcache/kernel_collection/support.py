@@ -12,6 +12,7 @@ from ...patchsets import PatchType
 
 from ....datasets import os_data
 from ....support  import subprocess_wrapper
+from ...root_state import ROOT_PATCH_METADATA_PATH
 
 
 class KernelCacheSupport:
@@ -122,9 +123,9 @@ class KernelCacheSupport:
             return
 
         logging.info("- Cleaning Auxiliary Kernel Collection")
-        oclp_path = "/System/Library/CoreServices/OpenCore-Legacy-Patcher.plist"
-        if Path(oclp_path).exists():
-            oclp_plist_data = plistlib.load(Path(oclp_path).open("rb"))
+        if ROOT_PATCH_METADATA_PATH.exists():
+            with ROOT_PATCH_METADATA_PATH.open("rb") as metadata_file:
+                oclp_plist_data = plistlib.load(metadata_file)
             for key in oclp_plist_data:
                 if isinstance(oclp_plist_data[key], (bool, int)):
                     continue

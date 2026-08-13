@@ -55,6 +55,7 @@ class IdenticalStateBlockingTests(unittest.TestCase):
             "Metadata Schema": ROOT_PATCH_METADATA_SCHEMA,
             "Project Identity": self.constants.project_identity,
             "Commit Ref": self.constants.commit_info[0],
+            "Commit Date": self.constants.commit_info[1],
             "Commit SHA": sha,
             "Commit URL": f"{REPOSITORY}/commit/{sha}",
             "Repository": REPOSITORY,
@@ -80,17 +81,17 @@ class IdenticalStateBlockingTests(unittest.TestCase):
     def test_same_version_different_full_sha_is_not_same(self) -> None:
         self._write(self._metadata(sha="2" * 40))
         result = self._evaluator(RootStateEvidence(True, "Broken")).evaluate(PATCHES)
-        self.assertNotEqual(result.state, RootPatchState.INSTALLED_SAME)
+        self.assertEqual(result.state, RootPatchState.INSTALLED_DIFFERENT_BUILD)
 
     def test_same_sha_different_selection_is_not_same(self) -> None:
         self._write(self._metadata(patches=("Modern Wireless",)))
         result = self._evaluator(RootStateEvidence(True, "Broken")).evaluate(PATCHES)
-        self.assertNotEqual(result.state, RootPatchState.INSTALLED_SAME)
+        self.assertEqual(result.state, RootPatchState.INSTALLED_DIFFERENT_PATCH_SET)
 
     def test_malformed_metadata_is_not_same(self) -> None:
         self.metadata_path.write_bytes(b"not a plist")
         result = self._evaluator(RootStateEvidence(True, "Broken")).evaluate(PATCHES)
-        self.assertNotEqual(result.state, RootPatchState.INSTALLED_SAME)
+        self.assertEqual(result.state, RootPatchState.INVALID_UNKNOWN)
 
     def test_click_time_revalidation_observes_changed_state(self) -> None:
         evaluator = self._evaluator(RootStateEvidence(True, "Yes"))
@@ -106,7 +107,7 @@ class IdenticalStateBlockingTests(unittest.TestCase):
         patcher.constants = self.constants
         patcher.patch_set_dictionary = {}
         detection = types.SimpleNamespace(patches=PATCHES, can_patch=True)
-        blocked = RootPatchStateResult(RootPatchState.INSTALLED_SAME, False, "already installed")
+        blocked = RootPatchStateResult(RootPatchState.INSTALLED_SAME, False, True, "already installed")
         with mock.patch.object(sys_patch, "HardwarePatchsetDetection", return_value=detection), \
              mock.patch.object(sys_patch, "RootPatchStateEvaluator") as evaluator, \
              mock.patch.object(sys_patch, "PatcherSupportPkgMount") as support_mount:

@@ -113,6 +113,7 @@ class SysPatchDisplayFrame(wx.Frame):
 
         root_state = RootPatchStateEvaluator(self.constants).evaluate(requested_patchset)
         no_new_patches = root_state.state == RootPatchState.INSTALLED_SAME
+        root_state_blocks_patch = root_state.patch_allowed is False
 
         if not patches:
             # Prompt user with no patches found
@@ -150,6 +151,11 @@ class SysPatchDisplayFrame(wx.Frame):
                 if i == 20:
                     patch_label.SetLabel(patch_label.GetLabel().replace("-", ""))
                     patch_label.Centre(wx.HORIZONTAL)
+
+            if root_state_blocks_patch and no_new_patches is False:
+                available_label.SetLabel(root_state.reason)
+                available_label.Wrap(330)
+                available_label.Centre(wx.HORIZONTAL)
 
             if patches[HardwarePatchsetValidation.PATCHING_NOT_POSSIBLE] is True:
                 # Cannot patch due to the following reasons:
@@ -230,14 +236,15 @@ class SysPatchDisplayFrame(wx.Frame):
             start_button.Disable()
         else:
             self.available_patches = True
-            if patches[HardwarePatchsetValidation.PATCHING_NOT_POSSIBLE] is True:
+            if patches[HardwarePatchsetValidation.PATCHING_NOT_POSSIBLE] is True or root_state_blocks_patch:
+                self.available_patches = False
                 start_button.Disable()
             elif no_new_patches is False:
                 start_button.SetDefault()
             else:
                 self.available_patches = False
                 start_button.Disable()
-        if can_unpatch is False:
+        if root_state.revert_allowed(can_unpatch) is False:
             revert_button.Disable()
 
         # Set frame size
@@ -266,6 +273,12 @@ class SysPatchDisplayFrame(wx.Frame):
 
 
     def on_revert_root_patching(self, patches: dict):
+        detection = HardwarePatchsetDetection(constants=self.constants)
+        root_state = RootPatchStateEvaluator(self.constants).evaluate(detection.patches)
+        if root_state.revert_allowed(detection.can_unpatch) is False:
+            logging.error(root_state.reason)
+            wx.MessageBox(root_state.reason, "Root Patch Reversion Unavailable", wx.OK | wx.ICON_WARNING)
+            return
         frame = gui_sys_patch_start.SysPatchStartFrame(
             parent=None,
             title=self.title,

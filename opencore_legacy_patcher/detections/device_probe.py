@@ -15,6 +15,7 @@ from typing import Any, ClassVar, Optional, Type, Union
 from . import ioreg
 
 from ..support import utilities
+from ..sys_patch.root_state import ROOT_PATCH_METADATA_PATH
 
 from ..datasets import (
     pci_data,
@@ -1006,11 +1007,16 @@ class Computer:
                     continue
 
     def oclp_sys_patch_probe(self):
-        path = Path("/System/Library/CoreServices/OpenCore-Legacy-Patcher.plist")
+        path = ROOT_PATCH_METADATA_PATH
         if not path.exists():
             self.oclp_sys_signed = True  # No plist, so assume root is valid
             return
-        sys_plist = plistlib.load(path.open("rb"))
+        try:
+            with path.open("rb") as plist_file:
+                sys_plist = plistlib.load(plist_file)
+        except (OSError, plistlib.InvalidFileException, ValueError, TypeError):
+            self.oclp_sys_signed = False
+            return
         if sys_plist:
             if "OpenCore Legacy Patcher" in sys_plist:
                 self.oclp_sys_version = sys_plist["OpenCore Legacy Patcher"]

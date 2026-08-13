@@ -145,6 +145,7 @@ class Constants:
         self.wxpython_variant:          bool = False  # Determine if using wxPython variant
         self.has_checked_updates:       bool = False  # Determine if check for updates has been run
         self.root_patcher_succeeded:    bool = False  # Determine if root patcher succeeded
+        self.root_patcher_revert_pending: bool = False  # Revert selected; reboot required before state is clean
         self.start_build_install:       bool = False  # Determine if build install should be started
         self.host_is_non_metal:         bool = False  # Determine if host is non-metal (ie. enable UI hacks)
         self.needs_to_open_preferences: bool = False  # Determine if preferences need to be opened

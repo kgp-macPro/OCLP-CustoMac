@@ -19,6 +19,7 @@ from . import gui_about
 from .. import constants
 
 from ..detections import device_probe
+from ..sys_patch.root_state import ROOT_PATCH_METADATA_PATH
 
 from ..datasets import (
     model_array,
@@ -199,11 +200,11 @@ class CheckProperties:
         """
         Grab PatcherSupportPkg version from OpenCore-Legacy-Patcher.plist
         """
-        oclp_plist_path = "/System/Library/CoreServices/OpenCore-Legacy-Patcher.plist"
-        if not Path(oclp_plist_path).exists():
+        if not ROOT_PATCH_METADATA_PATH.exists():
             return packaging.version.Version("0.0.0")
 
-        oclp_plist = plistlib.load(open(oclp_plist_path, "rb"))
+        with ROOT_PATCH_METADATA_PATH.open("rb") as metadata_file:
+            oclp_plist = plistlib.load(metadata_file)
         if "PatcherSupportPkg" not in oclp_plist:
             return packaging.version.Version("0.0.0")
 

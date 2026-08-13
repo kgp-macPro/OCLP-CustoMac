@@ -76,7 +76,7 @@ from . import (
     kernelcache
 )
 from .auto_patcher import InstallAutomaticPatchingServices
-from .root_state import RootPatchStateEvaluator
+from .root_state import ROOT_PATCH_METADATA_FILENAME, RootPatchStateEvaluator
 
 
 class PatchSysVolume:
@@ -200,6 +200,7 @@ class PatchSysVolume:
         ).clean_auxiliary_kc()
 
         self.constants.root_patcher_succeeded = True
+        self.constants.root_patcher_revert_pending = True
         logging.info("- Unpatching complete")
         logging.info("\nPlease reboot the machine for patches to take effect")
 
@@ -327,7 +328,7 @@ class PatchSysVolume:
         """
 
         destination_path = f"{self.mount_location}/System/Library/CoreServices"
-        file_name = "OpenCore-Legacy-Patcher.plist"
+        file_name = ROOT_PATCH_METADATA_FILENAME
         destination_path_file = f"{destination_path}/{file_name}"
         if sys_patch_helpers.SysPatchHelpers(self.constants).generate_patchset_plist(patchset, file_name, self.kdk_path, self.metallib_path):
             logging.info("- Writing patchset information to Root Volume")
@@ -598,6 +599,11 @@ class PatchSysVolume:
         if patchset_obj.can_unpatch is False:
             logging.error("- Cannot continue with unpatching!!!")
             patchset_obj.detailed_errors()
+            return
+
+        root_state = RootPatchStateEvaluator(self.constants).evaluate(patchset_obj.patches)
+        if root_state.revert_applicable is False:
+            logging.error(f"- Root patch reversion blocked: {root_state.reason}")
             return
 
         if self._mount_root_vol() is False:

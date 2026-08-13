@@ -111,6 +111,7 @@ class SysPatchHelpers:
             "Commit URL": f"{self.constants.commit_info[2]}",
             "Commit SHA": f"{self.constants.commit_info[3]}",
             "Commit Ref": f"{self.constants.commit_info[0]}",
+            "Commit Date": f"{self.constants.commit_info[1]}",
             "Repository": f"{self.constants.commit_info[4]}",
             "Installed Patches": sorted(str(key) for key in patchset),
             "Kernel Debug Kit Used": f"{kdk_string}",

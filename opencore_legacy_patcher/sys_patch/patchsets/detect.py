@@ -62,6 +62,7 @@ from ...detections import (
     amfi_detect,
     device_probe
 )
+from ..root_state import ROOT_PATCH_METADATA_PATH
 
 
 class HardwarePatchsetSettings(StrEnum):
@@ -285,11 +286,11 @@ class HardwarePatchsetDetection:
         """
         Check if network patches are already applied
         """
-        oclp_patch_path = "/System/Library/CoreServices/OpenCore-Legacy-Patcher.plist"
-        if not Path(oclp_patch_path).exists():
+        if not ROOT_PATCH_METADATA_PATH.exists():
             return False
         try:
-            oclp_plist = plistlib.load(open(oclp_patch_path, "rb"))
+            with ROOT_PATCH_METADATA_PATH.open("rb") as metadata_file:
+                oclp_plist = plistlib.load(metadata_file)
         except Exception as e:
             return False
         if "Legacy Wireless" in oclp_plist or "Modern Wireless" in oclp_plist:

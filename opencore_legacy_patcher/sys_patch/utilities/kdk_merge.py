@@ -10,6 +10,7 @@ from ... import constants
 from ...datasets import os_data
 from ...support import subprocess_wrapper, kdk_handler
 from ...volume import generate_copy_arguments
+from ..root_state import ROOT_PATCH_METADATA_PATH
 
 
 class KernelDebugKitMerge:
@@ -24,7 +25,7 @@ class KernelDebugKitMerge:
         """
         Check whether the KDK is already merged with the root volume
         """
-        oclp_plist = Path("/System/Library/CoreServices/OpenCore-Legacy-Patcher.plist")
+        oclp_plist = ROOT_PATCH_METADATA_PATH
         if not oclp_plist.exists():
             return False
 
