@@ -27,6 +27,12 @@ KDK_IDENTITY = KernelDebugKitIdentity("26.6.2", "25G82", "/Library/Developer/KDK
 
 class InstalledSelectionReadOnlyTests(unittest.TestCase):
     def _state(self, state: RootPatchState, installed_selection=None, kdk_mode=None, kdk_identity=None):
+        recovery_authorized = state in {
+            RootPatchState.PATCH_PENDING_REBOOT,
+            RootPatchState.INSTALLED_SAME,
+            RootPatchState.INSTALLED_DIFFERENT_PATCH_SET,
+            RootPatchState.INSTALLED_DIFFERENT_BUILD,
+        }
         return types.SimpleNamespace(
             state=state,
             installed_selection=installed_selection,
@@ -34,12 +40,8 @@ class InstalledSelectionReadOnlyTests(unittest.TestCase):
             installed_kdk_identity=kdk_identity,
             reason=f"State: {state.value}",
             patch_allowed=state == RootPatchState.CLEAN,
-            revert_allowed=lambda can_unpatch: state in {
-                RootPatchState.PATCH_PENDING_REBOOT,
-                RootPatchState.INSTALLED_SAME,
-                RootPatchState.INSTALLED_DIFFERENT_PATCH_SET,
-                RootPatchState.INSTALLED_DIFFERENT_BUILD,
-            } and can_unpatch,
+            recovery_authorized=recovery_authorized,
+            revert_allowed=lambda can_unpatch: recovery_authorized and can_unpatch,
         )
 
     def _display(self, selection=None, manual_state=None):

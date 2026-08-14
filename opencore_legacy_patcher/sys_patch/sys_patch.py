@@ -720,14 +720,14 @@ class PatchSysVolume:
             self.constants,
             patch_selection=getattr(self, "patch_selection", None),
         )
-        if patchset_obj.can_unpatch is False:
-            logging.error("- Cannot continue with unpatching!!!")
-            patchset_obj.detailed_errors()
+        root_state = RootPatchStateEvaluator(self.constants).evaluate(patchset_obj.patches)
+        if root_state.recovery_authorized is False:
+            logging.error(f"- Root patch reversion blocked: {root_state.reason}")
             return
 
-        root_state = RootPatchStateEvaluator(self.constants).evaluate(patchset_obj.patches)
-        if root_state.revert_applicable is False:
-            logging.error(f"- Root patch reversion blocked: {root_state.reason}")
+        if patchset_obj.can_unpatch is False:
+            logging.error("- Revert is required by the current root state, but SIP requirements prevent execution")
+            patchset_obj.detailed_errors()
             return
 
         if self._mount_root_vol() is False:

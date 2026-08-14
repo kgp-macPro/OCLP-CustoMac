@@ -50,6 +50,7 @@ class Phase3CManualKDKGUIStateTests(unittest.TestCase):
             state=RootPatchState.CLEAN if patch_allowed else RootPatchState.INSTALLED_SAME,
             reason="Already installed",
             patch_allowed=patch_allowed,
+            recovery_authorized=not patch_allowed,
             revert_allowed=lambda can_unpatch: not patch_allowed,
         )
         with mock.patch.object(gui_sys_patch_display, "HardwarePatchsetDetection", return_value=detection), \

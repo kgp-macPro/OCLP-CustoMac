@@ -53,6 +53,17 @@ def installed_manual_kdk_text(root_state) -> str:
     return f"Build {identity.build}"
 
 
+def recovery_status_text(root_state, can_unpatch: bool) -> str:
+    """Keep an authorized recovery path visible even when SIP blocks execution."""
+    if getattr(root_state, "recovery_authorized", False) is False or can_unpatch:
+        return root_state.reason
+    return (
+        f"{root_state.reason}\n"
+        "Revert Root Patches is required, but the current System Integrity Protection settings do not permit it. "
+        "Restore the required SIP configuration before reverting."
+    )
+
+
 class SysPatchDisplayFrame(wx.Frame):
     """
     Create a modal frame for displaying root patches
@@ -393,7 +404,7 @@ class SysPatchDisplayFrame(wx.Frame):
         self.selection_summary.Centre(wx.HORIZONTAL)
 
         if root_state.state != RootPatchState.CLEAN:
-            status = root_state.reason
+            status = recovery_status_text(root_state, detection.can_unpatch)
         elif not requested_patchset:
             status = EMPTY_SELECTION_MESSAGE
         elif detection.can_patch is False:
@@ -408,7 +419,10 @@ class SysPatchDisplayFrame(wx.Frame):
         self.start_button.Enable(start_allowed)
         if start_allowed:
             self.start_button.SetDefault()
-        self.revert_button.Enable(root_state.revert_allowed(detection.can_unpatch))
+        # Root-state recovery authorization and SIP-derived executability are
+        # intentionally separate.  Keep the recovery action visible so a SIP
+        # prerequisite cannot produce a silent Patch-off/Revert-off deadlock.
+        self.revert_button.Enable(root_state.recovery_authorized)
         self.available_patches = start_allowed
 
 
@@ -526,9 +540,14 @@ class SysPatchDisplayFrame(wx.Frame):
 
     def on_revert_root_patching(self, event: wx.Event = None):
         self._refresh_selection_state()
-        if self.root_state.revert_allowed(self.current_detection.can_unpatch) is False:
+        if self.root_state.recovery_authorized is False:
             logging.error(self.root_state.reason)
             wx.MessageBox(self.root_state.reason, "Root Patch Reversion Unavailable", wx.OK | wx.ICON_WARNING)
+            return
+        if self.current_detection.can_unpatch is False:
+            reason = recovery_status_text(self.root_state, False)
+            logging.error(reason)
+            wx.MessageBox(reason, "Root Patch Reversion Prerequisite", wx.OK | wx.ICON_WARNING)
             return
         frame = gui_sys_patch_start.SysPatchStartFrame(
             parent=None,

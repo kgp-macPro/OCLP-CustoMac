@@ -26,11 +26,13 @@ ROOT_PATCH_METADATA_PATH = ROOT_PATCH_METADATA_DIRECTORY / ROOT_PATCH_METADATA_F
 ROOT_PATCH_METADATA_SCHEMA = "KGP-Root-Patch-State-v1"
 KDK_SELECTION_MODE_METADATA_KEY = "Kernel Debug Kit Selection Mode"
 KDK_IDENTITY_METADATA_KEY = "Kernel Debug Kit Identity"
-FOREIGN_METADATA_FILENAMES = frozenset({
-    "OCLP-R.plist",
-    "OCLP-Plus.plist",
-    "OCLP-Mod.plist",
-})
+FOREIGN_METADATA_IDENTITIES = {
+    "OCLP-R.plist": "OCLP-R",
+    "OCLP-Plus.plist": "OCLP-Plus",
+    "OCLP-Mod.plist": "OCLP-Mod",
+    "oclp-mod.plist": "OCLP-Mod",
+}
+FOREIGN_METADATA_FILENAMES = frozenset(FOREIGN_METADATA_IDENTITIES)
 FULL_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -76,8 +78,19 @@ class RootPatchStateResult:
     installed_kdk_selection_mode: KDKSelectionMode | None = None
     installed_kdk_identity: KernelDebugKitIdentity | None = None
 
+    @property
+    def patch_authorized(self) -> bool:
+        """Root-state authorization, independent of GUI selection prerequisites."""
+        return self.patch_allowed
+
+    @property
+    def recovery_authorized(self) -> bool:
+        """Evidence-backed recovery authorization, independent of SIP execution prerequisites."""
+        return self.revert_applicable
+
     def revert_allowed(self, can_unpatch: bool) -> bool:
-        return self.revert_applicable and can_unpatch
+        """Whether recovery is both authorized by state and currently executable."""
+        return self.recovery_authorized and can_unpatch
 
 
 @dataclass(frozen=True)
@@ -85,7 +98,7 @@ class MetadataResult:
     discovery: MetadataDiscovery
     data: dict | None
     reason: str
-    known_patch_metadata_present: bool
+    recovery_evidence_present: bool
 
 
 def semantic_patch_selection(patches: dict) -> tuple[str, ...]:
@@ -181,28 +194,57 @@ class RootPatchStateEvaluator:
                 MetadataDiscovery.INVALID,
                 None,
                 f"Ambiguous metadata filenames: {', '.join(sorted(case_candidates))}",
-                True,
+                False,
             )
         if case_candidates and case_candidates[0] != ROOT_PATCH_METADATA_FILENAME:
             return MetadataResult(
                 MetadataDiscovery.INVALID,
                 None,
                 f"Metadata filename capitalization is invalid: {case_candidates[0]}",
-                True,
+                False,
             )
         if case_candidates and foreign_candidates:
             return MetadataResult(
                 MetadataDiscovery.INVALID,
                 None,
                 f"Multiple patch metadata families are present: {', '.join([*case_candidates, *foreign_candidates])}",
-                True,
+                False,
             )
         if not case_candidates:
             if foreign_candidates:
+                if len(foreign_candidates) > 1:
+                    return MetadataResult(
+                        MetadataDiscovery.INVALID,
+                        None,
+                        f"Multiple foreign patch metadata families are present: {', '.join(foreign_candidates)}",
+                        False,
+                    )
+                foreign_name = foreign_candidates[0]
+                try:
+                    with entries[foreign_name].open("rb") as metadata_file:
+                        foreign_metadata = plistlib.load(metadata_file)
+                except (OSError, plistlib.InvalidFileException, ValueError, TypeError) as error:
+                    return MetadataResult(
+                        MetadataDiscovery.INVALID,
+                        None,
+                        f"Recognized foreign patch metadata is unreadable or malformed: {error}",
+                        False,
+                    )
+                expected_identity = FOREIGN_METADATA_IDENTITIES[foreign_name]
+                if not isinstance(foreign_metadata, dict) or not isinstance(
+                    foreign_metadata.get(expected_identity),
+                    str,
+                ) or not foreign_metadata[expected_identity].strip():
+                    return MetadataResult(
+                        MetadataDiscovery.INVALID,
+                        None,
+                        f"Recognized foreign patch metadata does not contain a valid {expected_identity} identity",
+                        False,
+                    )
                 return MetadataResult(
                     MetadataDiscovery.LEGACY_FOREIGN,
-                    None,
-                    f"Foreign patch metadata is present: {', '.join(foreign_candidates)}",
+                    foreign_metadata,
+                    f"Recognized OCLP-family patch metadata is present: {foreign_name}",
                     True,
                 )
             return MetadataResult(MetadataDiscovery.MISSING, None, "No root-patch metadata is installed", False)
@@ -215,10 +257,21 @@ class RootPatchStateEvaluator:
                 MetadataDiscovery.INVALID,
                 None,
                 f"Root-patch metadata is unreadable or malformed: {error}",
-                True,
+                False,
             )
         if not isinstance(metadata, dict):
-            return MetadataResult(MetadataDiscovery.INVALID, None, "Root-patch metadata is not a dictionary", True)
+            return MetadataResult(MetadataDiscovery.INVALID, None, "Root-patch metadata is not a dictionary", False)
+        is_current_schema = metadata.get("Metadata Schema") == ROOT_PATCH_METADATA_SCHEMA
+        legacy_identity = metadata.get("OpenCore Legacy Patcher")
+        if is_current_schema is False and (
+            not isinstance(legacy_identity, str) or not legacy_identity.strip()
+        ):
+            return MetadataResult(
+                MetadataDiscovery.INVALID,
+                None,
+                "Canonical metadata does not contain a recognized OCLP-family identity",
+                False,
+            )
         return MetadataResult(MetadataDiscovery.CANONICAL, metadata, "Canonical metadata found", True)
 
     def _result(
@@ -344,7 +397,7 @@ class RootPatchStateEvaluator:
 
         lifecycle = self.lifecycle_store.read()
         if lifecycle.discovery == LifecycleDiscovery.INVALID:
-            safe_known_revert = bool(evidence and evidence.patched and metadata.known_patch_metadata_present)
+            safe_known_revert = bool(evidence and evidence.patched and metadata.recovery_evidence_present)
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 lifecycle.reason,
@@ -359,7 +412,7 @@ class RootPatchStateEvaluator:
         if evidence is None:
             return self._result(RootPatchState.INVALID_UNKNOWN, "Root snapshot and seal state could not be read")
 
-        safe_known_revert = evidence.patched and metadata.known_patch_metadata_present
+        safe_known_revert = evidence.patched and metadata.recovery_evidence_present
 
         if metadata.discovery == MetadataDiscovery.INVALID:
             return self._result(

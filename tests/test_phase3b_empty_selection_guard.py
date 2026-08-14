@@ -40,6 +40,7 @@ class Phase3BEmptySelectionGuardTests(unittest.TestCase):
             state=RootPatchState.CLEAN,
             reason="",
             patch_allowed=True,
+            recovery_authorized=False,
             revert_allowed=lambda can_unpatch: False,
         )
         empty_detection = types.SimpleNamespace(
