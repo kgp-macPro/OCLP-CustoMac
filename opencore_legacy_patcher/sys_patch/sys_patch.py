@@ -66,7 +66,7 @@ from ..support import (
     subprocess_wrapper,
     metallib_handler
 )
-from ..support.kdk_selection import KernelDebugKitCandidate
+from ..support.kdk_selection import KDKSelectionMode, KernelDebugKitCandidate
 from .patchsets import (
     HardwarePatchsetDetection,
     HardwarePatchsetSettings,
@@ -361,7 +361,20 @@ class PatchSysVolume:
         destination_path = f"{self.mount_location}/System/Library/CoreServices"
         file_name = ROOT_PATCH_METADATA_FILENAME
         destination_path_file = f"{destination_path}/{file_name}"
-        if sys_patch_helpers.SysPatchHelpers(self.constants).generate_patchset_plist(patchset, file_name, self.kdk_path, self.metallib_path):
+        kdk_selection_mode = None
+        if self.kdk_path is not None:
+            kdk_selection_mode = (
+                KDKSelectionMode.MANUAL
+                if self.manual_kdk_candidate is not None
+                else KDKSelectionMode.AUTO
+            )
+        if sys_patch_helpers.SysPatchHelpers(self.constants).generate_patchset_plist(
+            patchset,
+            file_name,
+            self.kdk_path,
+            self.metallib_path,
+            kdk_selection_mode,
+        ):
             logging.info("- Writing patchset information to Root Volume")
             if Path(destination_path_file).exists():
                 subprocess_wrapper.run_as_root_and_verify(["/bin/rm", destination_path_file], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)

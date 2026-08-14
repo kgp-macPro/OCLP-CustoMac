@@ -3,10 +3,67 @@
 from __future__ import annotations
 
 import re
+import plistlib
 import packaging.version
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
+
+
+class KDKSelectionMode(StrEnum):
+    """Historical resolver mode used by one completed root-patch operation."""
+
+    AUTO = "AUTO"
+    MANUAL = "MANUAL"
+
+
+@dataclass(frozen=True)
+class KernelDebugKitIdentity:
+    """Exact installed KDK identity used by one completed patch operation."""
+
+    version: str | None
+    build: str
+    path: str
+
+    @classmethod
+    def from_installed_path(cls, installed_path: Path | str) -> KernelDebugKitIdentity | None:
+        path = Path(installed_path)
+        version_plist = path / "System/Library/CoreServices/SystemVersion.plist"
+        try:
+            with version_plist.open("rb") as plist_file:
+                version_data = plistlib.load(plist_file)
+        except (OSError, plistlib.InvalidFileException, TypeError, ValueError):
+            return None
+        version = version_data.get("ProductVersion")
+        build = version_data.get("ProductBuildVersion")
+        if not isinstance(build, str) or not build:
+            return None
+        if not isinstance(version, str) or not version:
+            version = None
+        return cls(version=version, build=build, path=str(path))
+
+    @classmethod
+    def from_metadata(cls, metadata: object) -> KernelDebugKitIdentity | None:
+        if not isinstance(metadata, dict):
+            return None
+        version = metadata.get("Version")
+        build = metadata.get("Build")
+        path = metadata.get("Path")
+        if not all(isinstance(value, str) and value for value in (build, path)):
+            return None
+        if version is not None and (not isinstance(version, str) or not version):
+            return None
+        return cls(version=version, build=build, path=path)
+
+    def metadata(self) -> dict[str, str]:
+        metadata = {
+            "Build": self.build,
+            "Path": self.path,
+        }
+        if self.version is not None:
+            metadata["Version"] = self.version
+        return metadata
 
 
 @dataclass(frozen=True)

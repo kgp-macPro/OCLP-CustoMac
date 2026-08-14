@@ -8,7 +8,7 @@ import threading
 
 from .. import constants
 
-from ..support.kdk_selection import KDKSelectionContext, ManualKDKSelectionState
+from ..support.kdk_selection import KDKSelectionContext, KDKSelectionMode, ManualKDKSelectionState
 from ..sys_patch.patchsets import HardwarePatchsetDetection, HardwarePatchsetSettings, HardwarePatchsetValidation
 from ..sys_patch.root_selection import (
     EMPTY_SELECTION_MESSAGE,
@@ -39,6 +39,18 @@ def display_selection_for_state(
         applicable_patchsets,
         getattr(root_state, "installed_selection", None) or (),
     )
+
+
+def installed_manual_kdk_text(root_state) -> str:
+    """Format only trustworthy historical MANUAL KDK provenance."""
+    if getattr(root_state, "installed_kdk_selection_mode", None) != KDKSelectionMode.MANUAL:
+        return ""
+    identity = getattr(root_state, "installed_kdk_identity", None)
+    if identity is None or not getattr(identity, "build", None):
+        return ""
+    if getattr(identity, "version", None):
+        return f"macOS {identity.version} — Build {identity.build}"
+    return f"Build {identity.build}"
 
 
 class SysPatchDisplayFrame(wx.Frame):
@@ -274,7 +286,15 @@ class SysPatchDisplayFrame(wx.Frame):
         self.manual_kdk_checkbox.SetToolTip("Choose a specific macOS Tahoe KDK for this patch operation.")
         self.manual_kdk_checkbox.Bind(wx.EVT_CHECKBOX, self.on_manual_kdk_changed)
 
-        self.selection_state_label = wx.StaticText(frame, label="", pos=(-1, self.manual_kdk_checkbox.GetPosition().y + 28))
+        self.manual_kdk_history_label = wx.StaticText(
+            frame,
+            label="",
+            pos=(57, self.manual_kdk_checkbox.GetPosition().y + 22),
+        )
+        self.manual_kdk_history_label.SetFont(gui_support.font_factory(11, wx.FONTWEIGHT_NORMAL))
+        self.manual_kdk_history_label.Hide()
+
+        self.selection_state_label = wx.StaticText(frame, label="", pos=(-1, self.manual_kdk_checkbox.GetPosition().y + 44))
         self.selection_state_label.SetFont(gui_support.font_factory(12, wx.FONTWEIGHT_NORMAL))
         self.selection_state_label.Wrap(330)
         self.selection_state_label.Centre(wx.HORIZONTAL)
@@ -343,11 +363,19 @@ class SysPatchDisplayFrame(wx.Frame):
                 "manual_kdk_state",
                 ManualKDKSelectionState(),
             ).for_requirement(kdk_required)
+            manual_kdk_display_value = self.manual_kdk_state.enabled
         else:
             self.manual_kdk_state = ManualKDKSelectionState()
+            manual_kdk_display_value = (
+                getattr(root_state, "installed_kdk_selection_mode", None) == KDKSelectionMode.MANUAL
+            )
         if getattr(self, "manual_kdk_checkbox", None) is not None:
             self.manual_kdk_checkbox.Enable(selection_editable and kdk_required)
-            self.manual_kdk_checkbox.SetValue(self.manual_kdk_state.enabled)
+            self.manual_kdk_checkbox.SetValue(manual_kdk_display_value)
+        if getattr(self, "manual_kdk_history_label", None) is not None:
+            manual_kdk_history = "" if selection_editable else installed_manual_kdk_text(root_state)
+            self.manual_kdk_history_label.SetLabel(manual_kdk_history)
+            self.manual_kdk_history_label.Show(bool(manual_kdk_history))
 
         for identifier, checkbox in self.selection_checkboxes.items():
             checkbox.SetValue(display_selection.is_selected(identifier))

@@ -11,11 +11,15 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Callable
 
+from ..support.kdk_selection import KDKSelectionMode, KernelDebugKitIdentity
+
 
 ROOT_PATCH_METADATA_FILENAME = "OpenCore-Legacy-Patcher.plist"
 ROOT_PATCH_METADATA_DIRECTORY = Path("/System/Library/CoreServices")
 ROOT_PATCH_METADATA_PATH = ROOT_PATCH_METADATA_DIRECTORY / ROOT_PATCH_METADATA_FILENAME
 ROOT_PATCH_METADATA_SCHEMA = "KGP-Root-Patch-State-v1"
+KDK_SELECTION_MODE_METADATA_KEY = "Kernel Debug Kit Selection Mode"
+KDK_IDENTITY_METADATA_KEY = "Kernel Debug Kit Identity"
 FOREIGN_METADATA_FILENAMES = frozenset({
     "OCLP-R.plist",
     "OCLP-Plus.plist",
@@ -62,6 +66,8 @@ class RootPatchStateResult:
     revert_applicable: bool
     reason: str
     installed_selection: tuple[str, ...] | None = None
+    installed_kdk_selection_mode: KDKSelectionMode | None = None
+    installed_kdk_identity: KernelDebugKitIdentity | None = None
 
     def revert_allowed(self, can_unpatch: bool) -> bool:
         return self.revert_applicable and can_unpatch
@@ -99,6 +105,18 @@ def current_build_identity(global_constants) -> dict | None:
         "Repository": repository,
         "Project Identity": project,
     }
+
+
+def installed_kdk_provenance(metadata: dict) -> tuple[KDKSelectionMode | None, KernelDebugKitIdentity | None]:
+    """Read optional historical KDK provenance without guessing for older metadata."""
+    try:
+        mode = KDKSelectionMode(metadata.get(KDK_SELECTION_MODE_METADATA_KEY))
+    except (TypeError, ValueError):
+        return None, None
+    identity = KernelDebugKitIdentity.from_metadata(metadata.get(KDK_IDENTITY_METADATA_KEY))
+    if identity is None:
+        return None, None
+    return mode, identity
 
 
 def read_root_state_evidence() -> RootStateEvidence | None:
@@ -195,6 +213,8 @@ class RootPatchStateEvaluator:
         *,
         revert_applicable: bool = False,
         installed_selection: tuple[str, ...] | None = None,
+        installed_kdk_selection_mode: KDKSelectionMode | None = None,
+        installed_kdk_identity: KernelDebugKitIdentity | None = None,
     ) -> RootPatchStateResult:
         return RootPatchStateResult(
             state=state,
@@ -202,16 +222,58 @@ class RootPatchStateEvaluator:
             revert_applicable=revert_applicable,
             reason=reason,
             installed_selection=installed_selection,
+            installed_kdk_selection_mode=installed_kdk_selection_mode,
+            installed_kdk_identity=installed_kdk_identity,
         )
+
+    def _trusted_installed_history(
+        self,
+        metadata: MetadataResult,
+    ) -> tuple[tuple[str, ...] | None, KDKSelectionMode | None, KernelDebugKitIdentity | None]:
+        """Return display-only history from structurally valid KGP metadata."""
+        if metadata.discovery != MetadataDiscovery.CANONICAL or not isinstance(metadata.data, dict):
+            return None, None, None
+        installed = metadata.data
+        if installed.get("Metadata Schema") != ROOT_PATCH_METADATA_SCHEMA:
+            return None, None, None
+        identity = current_build_identity(self.constants)
+        if identity is None:
+            return None, None, None
+        if any(
+            key not in installed or not isinstance(installed[key], str) or not installed[key]
+            for key in identity
+        ):
+            return None, None, None
+        if installed.get("Project Identity") != identity["Project Identity"]:
+            return None, None, None
+        if installed.get("Repository") != identity["Repository"]:
+            return None, None, None
+        selection = installed.get("Installed Patches")
+        if not isinstance(selection, list) or not all(isinstance(item, str) for item in selection):
+            return None, None, None
+        if len(selection) != len(set(selection)):
+            return None, None, None
+        installed_sha = installed.get("Commit SHA")
+        installed_url = installed.get("Commit URL")
+        if not isinstance(installed_sha, str) or not FULL_SHA_PATTERN.fullmatch(installed_sha):
+            return None, None, None
+        if installed_url != f"{identity['Repository'].rstrip('/')}/commit/{installed_sha}":
+            return None, None, None
+        mode, kdk_identity = installed_kdk_provenance(installed)
+        return tuple(sorted(selection)), mode, kdk_identity
 
     def evaluate(self, requested_patches: dict) -> RootPatchStateResult:
         evidence = self.evidence_reader()
         metadata = self._discover_metadata()
 
         if getattr(self.constants, "root_patcher_revert_pending", False) is True:
+            installed_selection, kdk_mode, kdk_identity = self._trusted_installed_history(metadata)
             return self._result(
                 RootPatchState.REVERT_PENDING,
                 "Root patch reversion succeeded; reboot into the restored sealed snapshot before patching again",
+                installed_selection=installed_selection,
+                installed_kdk_selection_mode=kdk_mode,
+                installed_kdk_identity=kdk_identity,
             )
 
         if evidence is None:
@@ -303,12 +365,16 @@ class RootPatchStateEvaluator:
                 revert_applicable=True,
             )
 
+        installed_kdk_mode, installed_kdk_identity = installed_kdk_provenance(installed)
+
         if any(installed[key] != value for key, value in identity.items()):
             return self._result(
                 RootPatchState.INSTALLED_DIFFERENT_BUILD,
                 "Installed root patches were produced by a different exact build; revert, reboot, then repatch",
                 revert_applicable=True,
                 installed_selection=tuple(sorted(installed_selection)),
+                installed_kdk_selection_mode=installed_kdk_mode,
+                installed_kdk_identity=installed_kdk_identity,
             )
 
         expected_selection = semantic_patch_selection(requested_patches)
@@ -318,6 +384,8 @@ class RootPatchStateEvaluator:
                 "Installed and requested patch selections differ; revert, reboot, then apply the requested selection",
                 revert_applicable=True,
                 installed_selection=tuple(sorted(installed_selection)),
+                installed_kdk_selection_mode=installed_kdk_mode,
+                installed_kdk_identity=installed_kdk_identity,
             )
 
         return self._result(
@@ -325,4 +393,6 @@ class RootPatchStateEvaluator:
             "The requested root patches from this exact build are already installed",
             revert_applicable=True,
             installed_selection=tuple(sorted(installed_selection)),
+            installed_kdk_selection_mode=installed_kdk_mode,
+            installed_kdk_identity=installed_kdk_identity,
         )

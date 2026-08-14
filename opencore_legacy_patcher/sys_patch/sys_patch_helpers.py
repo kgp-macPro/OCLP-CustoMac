@@ -20,6 +20,8 @@ from ..support import (
     generate_smbios,
     subprocess_wrapper
 )
+from ..support.kdk_selection import KDKSelectionMode, KernelDebugKitIdentity
+from .root_state import KDK_IDENTITY_METADATA_KEY, KDK_SELECTION_MODE_METADATA_KEY
 
 
 class SysPatchHelpers:
@@ -77,7 +79,14 @@ class SysPatchHelpers:
                 f.write(data)
 
 
-    def generate_patchset_plist(self, patchset: dict, file_name: str, kdk_used: Path, metallib_used: Path):
+    def generate_patchset_plist(
+        self,
+        patchset: dict,
+        file_name: str,
+        kdk_used: Path,
+        metallib_used: Path,
+        kdk_selection_mode: KDKSelectionMode = None,
+    ):
         """
         Generate patchset file for user reference
 
@@ -120,13 +129,23 @@ class SysPatchHelpers:
             "Custom Signature": bool(Path(self.constants.payload_local_binaries_root_path / ".signed").exists()),
         }
 
+        if kdk_used:
+            if kdk_selection_mode not in (KDKSelectionMode.AUTO, KDKSelectionMode.MANUAL):
+                raise ValueError("KDK selection mode is required when recording a used KDK")
+            kdk_identity = KernelDebugKitIdentity.from_installed_path(kdk_used)
+            if kdk_identity is None:
+                raise ValueError("Exact KDK identity could not be read from the used KDK")
+            data[KDK_SELECTION_MODE_METADATA_KEY] = kdk_selection_mode.value
+            data[KDK_IDENTITY_METADATA_KEY] = kdk_identity.metadata()
+
         data.update(patchset)
 
         if Path(source_path_file).exists():
             os.remove(source_path_file)
 
         # Need to write to a safe location
-        plistlib.dump(data, Path(source_path_file).open("wb"), sort_keys=False)
+        with Path(source_path_file).open("wb") as metadata_file:
+            plistlib.dump(data, metadata_file, sort_keys=False)
 
         if Path(source_path_file).exists():
             return True
