@@ -6,8 +6,10 @@ import unittest
 from unittest import mock
 
 from opencore_legacy_patcher.detections.amfi_detect import AmfiConfigDetectLevel
+from opencore_legacy_patcher.sys_patch.patchsets.base import PatchType
 from opencore_legacy_patcher.sys_patch.patchsets import detect
 from opencore_legacy_patcher.sys_patch.patchsets.hardware.base import BaseHardware
+from opencore_legacy_patcher.sys_patch.patchsets.hardware.misc.modern_audio import ModernAudio
 from opencore_legacy_patcher.sys_patch.root_selection import (
     RootPatchSelection,
     SelectableRootPatch,
@@ -121,6 +123,20 @@ class Phase3BKDKSelectionTests(unittest.TestCase):
         result = self._detect(selection)
         self.assertEqual(set(result.patches), {"Modern Wireless"})
         self.assertFalse(result.device_properties[detect.HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED])
+
+    def test_wifi_only_excludes_the_beta_applehda_payload(self) -> None:
+        audio_patches = ModernAudio(25, 0, "25A123", self.constants).patches()
+        self.assertIn(
+            "AppleHDA.kext",
+            audio_patches["Modern Audio"][PatchType.OVERWRITE_SYSTEM_VOLUME]["/System/Library/Extensions"],
+        )
+        selection = RootPatchSelection.initialize(APPLICABLE).with_selection(
+            SelectableRootPatch.MODERN_AUDIO,
+            False,
+        )
+        filtered = selection.filter_patch_dictionary({"Modern Wireless": {}, **audio_patches})
+        self.assertEqual(set(filtered), {"Modern Wireless"})
+        self.assertNotIn("Modern Audio", filtered)
 
     def test_audio_only_retains_audio_kdk_requirement(self) -> None:
         selection = RootPatchSelection.initialize(APPLICABLE).with_selection(

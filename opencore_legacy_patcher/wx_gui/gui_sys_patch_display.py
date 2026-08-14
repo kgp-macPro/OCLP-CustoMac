@@ -10,6 +10,7 @@ from .. import constants
 
 from ..sys_patch.patchsets import HardwarePatchsetDetection, HardwarePatchsetValidation
 from ..sys_patch.root_selection import (
+    EMPTY_SELECTION_MESSAGE,
     SELECTABLE_ROOT_PATCHES,
     RootPatchSelection,
     SelectableRootPatch,
@@ -305,7 +306,7 @@ class SysPatchDisplayFrame(wx.Frame):
         self.selection_summary.Centre(wx.HORIZONTAL)
 
         if not requested_patchset:
-            status = "Select at least one applicable root patch."
+            status = EMPTY_SELECTION_MESSAGE
         elif root_state.state != RootPatchState.CLEAN:
             status = root_state.reason
         elif detection.can_patch is False:
@@ -333,7 +334,7 @@ class SysPatchDisplayFrame(wx.Frame):
     def on_start_root_patching(self, event: wx.Event = None):
         self._refresh_selection_state()
         if not self.requested_patchset:
-            wx.MessageBox("Select at least one applicable root patch.", "Root Patching Blocked", wx.OK | wx.ICON_WARNING)
+            wx.MessageBox(EMPTY_SELECTION_MESSAGE, "Root Patching Blocked", wx.OK | wx.ICON_WARNING)
             return
         if self.current_detection.can_patch is False:
             wx.MessageBox(

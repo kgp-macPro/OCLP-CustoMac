@@ -28,7 +28,7 @@ from ..wx_gui import (
 )
 
 from ..sys_patch.patchsets import HardwarePatchsetDetection, HardwarePatchsetSettings
-from ..sys_patch.root_selection import RootPatchSelection
+from ..sys_patch.root_selection import EMPTY_SELECTION_MESSAGE, RootPatchSelection
 from ..sys_patch.root_state import RootPatchStateEvaluator, semantic_patch_selection
 
 
@@ -63,6 +63,11 @@ class SysPatchStartFrame(wx.Frame):
         gui_support.GenerateMenubar(self, self.constants).generate()
         self.Centre()
 
+        if self.patch_selection is not None and self.patch_selection.is_empty():
+            self.patches = {}
+            self.expected_patch_selection = ()
+            return
+
         applicability = HardwarePatchsetDetection(constants=self.constants)
         if self.patch_selection is None:
             bootstrap_state = RootPatchStateEvaluator(self.constants).evaluate(applicability.patches)
@@ -81,13 +86,17 @@ class SysPatchStartFrame(wx.Frame):
 
 
     def _revalidate_patch_selection(self) -> HardwarePatchsetDetection | None:
+        if self.patch_selection is not None and self.patch_selection.is_empty():
+            wx.MessageBox(EMPTY_SELECTION_MESSAGE, "Root Patching Blocked", wx.OK | wx.ICON_WARNING)
+            return None
+
         detection = HardwarePatchsetDetection(
             constants=self.constants,
             patch_selection=self.patch_selection,
         )
         actual_selection = semantic_patch_selection(detection.patches)
         if not actual_selection:
-            wx.MessageBox("Select at least one applicable root patch.", "Root Patching Blocked", wx.OK | wx.ICON_WARNING)
+            wx.MessageBox(EMPTY_SELECTION_MESSAGE, "Root Patching Blocked", wx.OK | wx.ICON_WARNING)
             return None
         if actual_selection != self.expected_patch_selection:
             wx.MessageBox(
@@ -361,11 +370,10 @@ class SysPatchStartFrame(wx.Frame):
 
 
     def start_root_patching(self):
-        logging.info("Starting root patching")
-
         if self._revalidate_patch_selection() is None:
             return
 
+        logging.info("Starting root patching")
         while gui_support.PayloadMount(self.constants, self).is_unpack_finished() is False:
             wx.Yield()
             time.sleep(self.constants.thread_sleep_interval)

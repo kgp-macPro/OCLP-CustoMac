@@ -76,7 +76,7 @@ from . import (
     kernelcache
 )
 from .auto_patcher import InstallAutomaticPatchingServices
-from .root_selection import RootPatchSelection
+from .root_selection import EMPTY_SELECTION_MESSAGE, RootPatchSelection
 from .root_state import ROOT_PATCH_METADATA_FILENAME, RootPatchStateEvaluator, semantic_patch_selection
 
 
@@ -577,6 +577,11 @@ class PatchSysVolume:
         Entry function for the patching process
         """
 
+        patch_selection = getattr(self, "patch_selection", None)
+        if patch_selection is not None and patch_selection.is_empty():
+            logging.error(EMPTY_SELECTION_MESSAGE)
+            return
+
         logging.info("- Starting Patch Process")
         logging.info(f"- Determining Required Patch set for Darwin {self.constants.detected_os}")
         patchset_obj = HardwarePatchsetDetection(
@@ -586,7 +591,7 @@ class PatchSysVolume:
         self.patch_set_dictionary = patchset_obj.patches
 
         if self.patch_set_dictionary == {}:
-            logging.info("- No Root Patches required for your machine!")
+            logging.error(EMPTY_SELECTION_MESSAGE)
             return
 
         actual_patch_selection = semantic_patch_selection(self.patch_set_dictionary)

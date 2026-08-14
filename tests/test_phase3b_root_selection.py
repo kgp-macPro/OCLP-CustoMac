@@ -63,6 +63,26 @@ class RootPatchSelectionTests(unittest.TestCase):
         selection = selection.with_selection(SelectableRootPatch.MODERN_WIFI, False)
         selection = selection.with_selection(SelectableRootPatch.MODERN_AUDIO, False)
         self.assertEqual(selection.filter_patch_dictionary(PATCHES), {})
+        self.assertTrue(selection.is_empty())
+
+    def test_enabling_wifi_after_both_off_recomputes_selection(self) -> None:
+        selection = RootPatchSelection.initialize(APPLICABLE)
+        selection = selection.with_selection(SelectableRootPatch.MODERN_WIFI, False)
+        selection = selection.with_selection(SelectableRootPatch.MODERN_AUDIO, False)
+        selection = selection.with_selection(SelectableRootPatch.MODERN_WIFI, True)
+        self.assertEqual(
+            set(selection.filter_patch_dictionary(PATCHES)),
+            {"Modern Wireless", "Modern Wireless Extended"},
+        )
+        self.assertFalse(selection.is_empty())
+
+    def test_enabling_audio_after_both_off_recomputes_selection(self) -> None:
+        selection = RootPatchSelection.initialize(APPLICABLE)
+        selection = selection.with_selection(SelectableRootPatch.MODERN_WIFI, False)
+        selection = selection.with_selection(SelectableRootPatch.MODERN_AUDIO, False)
+        selection = selection.with_selection(SelectableRootPatch.MODERN_AUDIO, True)
+        self.assertEqual(set(selection.filter_patch_dictionary(PATCHES)), {"Modern Audio"})
+        self.assertFalse(selection.is_empty())
 
     def test_inapplicable_family_cannot_be_selected(self) -> None:
         selection = RootPatchSelection.initialize(("Networking: Modern Wireless",))

@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 
+EMPTY_SELECTION_MESSAGE = "Please select at least one patching option."
+
+
 class SelectableRootPatch(StrEnum):
     MODERN_WIFI = "modern-wifi"
     MODERN_AUDIO = "modern-audio"
@@ -103,6 +106,9 @@ class RootPatchSelection:
 
     def is_selected(self, identifier: SelectableRootPatch) -> bool:
         return identifier in self.selected
+
+    def is_empty(self) -> bool:
+        return not self.selected
 
     def is_hardware_patchset_selected(self, hardware_patchset_name: str) -> bool:
         definition = _DEFINITIONS_BY_HARDWARE_NAME.get(hardware_patchset_name)
