@@ -27,6 +27,20 @@ from ..wx_gui import (
 )
 
 
+def display_selection_for_state(
+    selection: RootPatchSelection,
+    applicable_patchsets: tuple[str, ...],
+    root_state,
+) -> RootPatchSelection:
+    """Return the operation selection or an evidence-backed read-only installed view."""
+    if root_state.state == RootPatchState.CLEAN:
+        return selection
+    return RootPatchSelection.initialize(
+        applicable_patchsets,
+        getattr(root_state, "installed_selection", None) or (),
+    )
+
+
 class SysPatchDisplayFrame(wx.Frame):
     """
     Create a modal frame for displaying root patches
@@ -310,6 +324,12 @@ class SysPatchDisplayFrame(wx.Frame):
         self.current_detection = detection
         self.requested_patchset = requested_patchset
         self.root_state = root_state
+        selection_editable = root_state.state == RootPatchState.CLEAN
+        display_selection = display_selection_for_state(
+            self.selection,
+            self._applicable_patchsets(detection),
+            root_state,
+        )
 
         kdk_required = bool(
             getattr(detection, "device_properties", {}).get(
@@ -317,27 +337,37 @@ class SysPatchDisplayFrame(wx.Frame):
                 False,
             )
         )
-        self.manual_kdk_state = getattr(
-            self,
-            "manual_kdk_state",
-            ManualKDKSelectionState(),
-        ).for_requirement(kdk_required)
+        if selection_editable:
+            self.manual_kdk_state = getattr(
+                self,
+                "manual_kdk_state",
+                ManualKDKSelectionState(),
+            ).for_requirement(kdk_required)
+        else:
+            self.manual_kdk_state = ManualKDKSelectionState()
         if getattr(self, "manual_kdk_checkbox", None) is not None:
-            self.manual_kdk_checkbox.Enable(kdk_required)
+            self.manual_kdk_checkbox.Enable(selection_editable and kdk_required)
             self.manual_kdk_checkbox.SetValue(self.manual_kdk_state.enabled)
 
         for identifier, checkbox in self.selection_checkboxes.items():
-            checkbox.SetValue(self.selection.is_selected(identifier))
+            checkbox.SetValue(display_selection.is_selected(identifier))
+            checkbox.Enable(selection_editable)
 
-        selected_names = self.selection.display_names()
+        selected_names = display_selection.display_names()
         selected_label = " + ".join(selected_names) if selected_names else "None"
-        self.selection_summary.SetLabel(f"Selected: {selected_label}")
+        if selection_editable:
+            summary = f"Selected: {selected_label}"
+        elif getattr(root_state, "installed_selection", None) is not None:
+            summary = f"Installed: {selected_label}"
+        else:
+            summary = "Installed selection: Unknown"
+        self.selection_summary.SetLabel(summary)
         self.selection_summary.Centre(wx.HORIZONTAL)
 
-        if not requested_patchset:
-            status = EMPTY_SELECTION_MESSAGE
-        elif root_state.state != RootPatchState.CLEAN:
+        if root_state.state != RootPatchState.CLEAN:
             status = root_state.reason
+        elif not requested_patchset:
+            status = EMPTY_SELECTION_MESSAGE
         elif detection.can_patch is False:
             status = "The selected root patches cannot be applied with the current system requirements."
         else:
@@ -355,12 +385,20 @@ class SysPatchDisplayFrame(wx.Frame):
 
 
     def on_patch_selection_changed(self, identifier: SelectableRootPatch, selected: bool) -> None:
+        self._refresh_selection_state()
+        if self.root_state.state != RootPatchState.CLEAN:
+            self.frame_modal.Layout()
+            return
         self.selection = self.selection.with_selection(identifier, selected)
         self._refresh_selection_state()
         self.frame_modal.Layout()
 
 
     def on_manual_kdk_changed(self, event: wx.Event) -> None:
+        self._refresh_selection_state()
+        if self.root_state.state != RootPatchState.CLEAN:
+            self.frame_modal.Layout()
+            return
         kdk_required = bool(
             self.current_detection.device_properties[HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED]
         )

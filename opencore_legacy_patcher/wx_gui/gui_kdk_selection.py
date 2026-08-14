@@ -12,10 +12,14 @@ from ..support.kdk_selection import (
 from . import gui_support
 
 
-def candidate_status_text(status: KDKCandidateStatus) -> str:
+KDK_SELECTION_DIALOG_SIZE = (610, 430)
+KDK_SELECTION_LIST_SIZE = (570, 210)
+
+
+def candidate_status_text(status: KDKCandidateStatus, *, include_automatic_marker: bool = True) -> str:
     match = "Exact Match" if status.automatic_exact_match else "Closest Match" if status.automatic_choice else ""
     installed = "Installed" if status.installed else "Not Installed"
-    automatic = "OCLP Automatic Choice" if status.automatic_choice else ""
+    automatic = "Automatic Choice" if status.automatic_choice and include_automatic_marker else ""
     return " · ".join(item for item in (match, installed, automatic) if item)
 
 
@@ -34,7 +38,7 @@ def automatic_choice_text(context: KDKSelectionContext) -> str:
     return (
         "OCLP automatic selection:\n"
         f"macOS {candidate.version} — Build {candidate.build}\n"
-        f"{candidate_status_text(status)}"
+        f"{candidate_status_text(status, include_automatic_marker=False)}"
     )
 
 
@@ -42,7 +46,7 @@ class ManualKDKSelectionDialog(wx.Dialog):
     """Select and explicitly confirm one trusted catalog candidate."""
 
     def __init__(self, parent: wx.Window, context: KDKSelectionContext):
-        super().__init__(parent, title="Select Kernel Debug Kit", size=(520, 430))
+        super().__init__(parent, title="Select Kernel Debug Kit", size=KDK_SELECTION_DIALOG_SIZE)
         self.context = context
         self.selected_candidate: KernelDebugKitCandidate | None = None
 
@@ -68,7 +72,7 @@ class ManualKDKSelectionDialog(wx.Dialog):
             panel,
             choices=[candidate_display_text(status) for status in context.candidates],
             style=wx.LB_SINGLE | wx.LB_NEEDED_SB,
-            size=(-1, 210),
+            size=KDK_SELECTION_LIST_SIZE,
         )
         outer.Add(self.candidate_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 14)
 

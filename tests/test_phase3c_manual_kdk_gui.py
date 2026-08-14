@@ -112,7 +112,10 @@ class Phase3CManualKDKGUIStateTests(unittest.TestCase):
         self.assertTrue(context.candidates[0].automatic_choice)
         self.assertTrue(context.candidates[0].installed)
         self.assertIn("Exact Match", gui_kdk_selection.automatic_choice_text(context))
-        self.assertIn("OCLP Automatic Choice", gui_kdk_selection.candidate_display_text(context.candidates[0]))
+        self.assertNotIn("Automatic Choice", gui_kdk_selection.automatic_choice_text(context))
+        row = gui_kdk_selection.candidate_display_text(context.candidates[0])
+        self.assertIn("Automatic Choice", row)
+        self.assertNotIn("OCLP Automatic Choice", row)
 
     def test_closest_automatic_choice_is_displayed_from_existing_resolver(self) -> None:
         context = KDKSelectionContext(
@@ -191,6 +194,19 @@ class Phase3CManualKDKGUIStateTests(unittest.TestCase):
 
         self.assertEqual(dialog.selected_candidate, CLOSEST)
         dialog.EndModal.assert_called_once_with(gui_kdk_selection.wx.ID_OK)
+
+    def test_dialog_width_accommodates_the_normal_automatic_choice_row(self) -> None:
+        longest_normal = KDKCandidateStatus(
+            KernelDebugKitCandidate("26.6.2", "25G5065a", "https://example/25G5065a.dmg", 1),
+            Path("/installed"),
+            True,
+            True,
+        )
+        row = gui_kdk_selection.candidate_display_text(longest_normal)
+        self.assertEqual(gui_kdk_selection.KDK_SELECTION_DIALOG_SIZE, (610, 430))
+        self.assertEqual(gui_kdk_selection.KDK_SELECTION_LIST_SIZE, (570, 210))
+        self.assertIn("Exact Match · Installed · Automatic Choice", row)
+        self.assertNotIn("OCLP Automatic Choice", row)
 
 
 if __name__ == "__main__":
