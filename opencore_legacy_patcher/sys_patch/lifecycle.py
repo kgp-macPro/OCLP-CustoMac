@@ -1,4 +1,4 @@
-"""Boot-session-bound lifecycle evidence for completed root-patch operations."""
+"""Boot-session-bound lifecycle evidence for root-patch transactions."""
 
 from __future__ import annotations
 
@@ -21,6 +21,8 @@ ROOT_PATCH_LIFECYCLE_SCHEMA = "KGP-Root-Patch-Lifecycle-v1"
 
 
 class RootPatchLifecycleState(StrEnum):
+    PATCH_IN_PROGRESS = "PATCH_IN_PROGRESS"
+    PATCH_FAILED_RECOVERY_REQUIRED = "PATCH_FAILED_RECOVERY_REQUIRED"
     PATCH_PENDING_REBOOT = "PATCH_PENDING_REBOOT"
     REVERT_PENDING = "REVERT_PENDING"
 

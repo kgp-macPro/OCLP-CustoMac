@@ -79,7 +79,12 @@ from . import (
 )
 from .auto_patcher import InstallAutomaticPatchingServices
 from .root_selection import EMPTY_SELECTION_MESSAGE, RootPatchSelection
-from .root_state import ROOT_PATCH_METADATA_FILENAME, RootPatchStateEvaluator, semantic_patch_selection
+from .root_state import (
+    ROOT_PATCH_METADATA_FILENAME,
+    RootPatchStateEvaluator,
+    current_build_identity,
+    semantic_patch_selection,
+)
 from .root_state import ROOT_PATCH_METADATA_PATH
 from .lifecycle import LifecycleDiscovery, RootPatchLifecycleState, RootPatchLifecycleStore
 
@@ -401,6 +406,48 @@ class PatchSysVolume:
             logging.error("- Root patching succeeded, but persistent pending-reboot evidence could not be recorded")
 
 
+    def _patch_transaction_metadata(self) -> dict:
+        """Return integrity-protected transaction evidence, not installed metadata."""
+        metadata = {
+            "Transaction Schema": "KGP-Root-Patch-Transaction-v1",
+            "Requested Patches": list(semantic_patch_selection(self.patch_set_dictionary)),
+        }
+        identity = current_build_identity(self.constants)
+        if identity is not None:
+            metadata.update(identity)
+        return metadata
+
+
+    def _record_patch_in_progress(self) -> bool:
+        metadata = self._patch_transaction_metadata()
+        self.constants.root_patcher_patch_pending = False
+        self.constants.root_patcher_revert_pending = False
+        self.constants.root_patcher_pending_metadata = metadata
+        if RootPatchLifecycleStore(self.constants).write(
+            RootPatchLifecycleState.PATCH_IN_PROGRESS,
+            metadata,
+        ) is False:
+            logging.error("- Cannot cross the root-mutation boundary without durable recovery evidence")
+            return False
+        return True
+
+
+    def _record_patch_failed(self) -> None:
+        metadata = getattr(self.constants, "root_patcher_pending_metadata", None)
+        if not isinstance(metadata, dict):
+            metadata = self._patch_transaction_metadata()
+        self.constants.root_patcher_patch_pending = False
+        self.constants.root_patcher_revert_pending = False
+        self.constants.root_patcher_pending_metadata = metadata
+        if RootPatchLifecycleStore(self.constants).write(
+            RootPatchLifecycleState.PATCH_FAILED_RECOVERY_REQUIRED,
+            metadata,
+        ) is False:
+            # The preceding PATCH_IN_PROGRESS record remains the conservative
+            # recovery signal if this state-transition write fails.
+            logging.error("- Failed to update root-patch lifecycle; in-progress recovery evidence remains authoritative")
+
+
     def _record_revert_pending(self) -> None:
         metadata = getattr(self.constants, "root_patcher_pending_metadata", None)
         lifecycle_store = RootPatchLifecycleStore(self.constants)
@@ -705,9 +752,25 @@ class PatchSysVolume:
             logging.error("- Please ensure that you do not have any updates pending")
             return
 
-        self._patch_root_vol()
+        # Everything above this point is validation, resource preparation, or
+        # mounting.  _patch_root_vol() begins with preflight operations that
+        # can mutate the Data/System root, so durable same-boot recovery
+        # evidence is mandatory before crossing that boundary.
+        if self._record_patch_in_progress() is False:
+            self._unmount_root_vol()
+            return
+
+        try:
+            self._patch_root_vol()
+        except Exception:
+            self._record_patch_failed()
+            self._unmount_root_vol()
+            raise
         if self.constants.root_patcher_succeeded is True:
             self._record_patch_pending()
+            return
+        self._record_patch_failed()
+        self._unmount_root_vol()
 
 
     def start_unpatch(self) -> None:

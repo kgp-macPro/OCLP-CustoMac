@@ -38,6 +38,8 @@ FULL_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 class RootPatchState(StrEnum):
     CLEAN = "clean"
+    PATCH_IN_PROGRESS = "patch-in-progress"
+    PATCH_FAILED_RECOVERY_REQUIRED = "patch-failed-recovery-required"
     PATCH_PENDING_REBOOT = "patch-pending-reboot-required"
     INSTALLED_SAME = "installed-same"
     INSTALLED_DIFFERENT_PATCH_SET = "installed-different-patch-set"
@@ -58,14 +60,21 @@ class MetadataDiscovery(StrEnum):
 class RootStateEvidence:
     apfs_snapshot: bool
     seal: str
+    safe_rollback_available: bool = False
+    root_device_identifier: str | None = None
 
     @property
     def clean(self) -> bool:
-        return self.apfs_snapshot and self.seal.lower() in {"yes", "sealed"}
+        return self.apfs_snapshot and self.seal.lower() in {"yes", "sealed", "true"}
 
     @property
     def patched(self) -> bool:
-        return self.apfs_snapshot and self.seal.lower() == "broken"
+        return self.apfs_snapshot and self.seal.lower() in {"broken", "no", "unsealed", "false"}
+
+    @property
+    def recovery_required(self) -> bool:
+        """Whether the active root is positively known not to be clean/sealed."""
+        return self.seal.lower() in {"broken", "no", "unsealed", "false"}
 
 
 @dataclass(frozen=True)
@@ -150,12 +159,59 @@ def read_root_state_evidence() -> RootStateEvidence | None:
         content = plistlib.loads(root_result.stdout)
         if "Sealed" not in content:
             return None
-        return RootStateEvidence(
+        evidence = RootStateEvidence(
             apfs_snapshot=content.get("APFSSnapshot") is True,
             seal=str(content["Sealed"]),
+            root_device_identifier=(
+                content.get("DeviceIdentifier")
+                if isinstance(content.get("DeviceIdentifier"), str) and content.get("DeviceIdentifier")
+                else None
+            ),
         )
     except (plistlib.InvalidFileException, TypeError, ValueError):
         return None
+
+    if evidence.recovery_required is False or evidence.root_device_identifier is None:
+        return evidence
+
+    # Query only the active root's own APFS volume/snapshot device.  A sealed
+    # snapshot UUID on this exact volume is positive rollback evidence; names
+    # and snapshots from unrelated APFS volumes are deliberately ignored.
+    snapshot_result = subprocess.run(
+        [
+            "/usr/sbin/diskutil",
+            "apfs",
+            "listSnapshots",
+            "-plist",
+            evidence.root_device_identifier,
+        ],
+        capture_output=True,
+    )
+    if snapshot_result.returncode != 0:
+        return evidence
+    try:
+        snapshot_content = plistlib.loads(snapshot_result.stdout)
+        snapshots = snapshot_content.get("Snapshots")
+        if not isinstance(snapshots, list):
+            return evidence
+        safe_rollback_available = any(
+            isinstance(snapshot, dict)
+            and isinstance(snapshot.get("SnapshotUUID"), str)
+            and bool(snapshot["SnapshotUUID"])
+            and (
+                snapshot.get("Sealed") is True
+                or str(snapshot.get("Sealed", "")).lower() in {"yes", "sealed", "true"}
+            )
+            for snapshot in snapshots
+        )
+    except (plistlib.InvalidFileException, AttributeError, TypeError, ValueError):
+        return evidence
+    return RootStateEvidence(
+        apfs_snapshot=evidence.apfs_snapshot,
+        seal=evidence.seal,
+        safe_rollback_available=safe_rollback_available,
+        root_device_identifier=evidence.root_device_identifier,
+    )
 
 
 class RootPatchStateEvaluator:
@@ -342,24 +398,42 @@ class RootPatchStateEvaluator:
             True,
         )
         installed_selection, kdk_mode, kdk_identity = self._trusted_installed_history(metadata)
+        if lifecycle_state == RootPatchLifecycleState.REVERT_PENDING:
+            return self._result(
+                RootPatchState.REVERT_PENDING,
+                "Root patch reversion succeeded; reboot into the restored sealed snapshot before patching again",
+                installed_selection=installed_selection,
+                installed_kdk_selection_mode=kdk_mode,
+                installed_kdk_identity=kdk_identity,
+            )
+        if lifecycle_state == RootPatchLifecycleState.PATCH_IN_PROGRESS:
+            return self._result(
+                RootPatchState.PATCH_IN_PROGRESS,
+                "Root patching crossed the root-mutation boundary and did not complete; revert to the last sealed snapshot before patching again",
+                revert_applicable=True,
+                installed_selection=installed_selection,
+                installed_kdk_selection_mode=kdk_mode,
+                installed_kdk_identity=kdk_identity,
+            )
+        if lifecycle_state == RootPatchLifecycleState.PATCH_FAILED_RECOVERY_REQUIRED:
+            return self._result(
+                RootPatchState.PATCH_FAILED_RECOVERY_REQUIRED,
+                "Root patching failed after root mutation began; revert to the last sealed snapshot before patching again",
+                revert_applicable=True,
+                installed_selection=installed_selection,
+                installed_kdk_selection_mode=kdk_mode,
+                installed_kdk_identity=kdk_identity,
+            )
         if installed_selection is None:
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 "A completed root-patch lifecycle is pending reboot, but its installed operation metadata is not trustworthy",
                 revert_applicable=True,
             )
-        if lifecycle_state == RootPatchLifecycleState.PATCH_PENDING_REBOOT:
-            return self._result(
-                RootPatchState.PATCH_PENDING_REBOOT,
-                "Root patching completed successfully; reboot to use the new patched snapshot, or revert before rebooting",
-                revert_applicable=True,
-                installed_selection=installed_selection,
-                installed_kdk_selection_mode=kdk_mode,
-                installed_kdk_identity=kdk_identity,
-            )
         return self._result(
-            RootPatchState.REVERT_PENDING,
-            "Root patch reversion succeeded; reboot into the restored sealed snapshot before patching again",
+            RootPatchState.PATCH_PENDING_REBOOT,
+            "Root patching completed successfully; reboot to use the new patched snapshot, or revert before rebooting",
+            revert_applicable=True,
             installed_selection=installed_selection,
             installed_kdk_selection_mode=kdk_mode,
             installed_kdk_identity=kdk_identity,
@@ -397,7 +471,13 @@ class RootPatchStateEvaluator:
 
         lifecycle = self.lifecycle_store.read()
         if lifecycle.discovery == LifecycleDiscovery.INVALID:
-            safe_known_revert = bool(evidence and evidence.patched and metadata.recovery_evidence_present)
+            safe_known_revert = bool(
+                evidence
+                and (
+                    (evidence.patched and metadata.recovery_evidence_present)
+                    or (evidence.recovery_required and evidence.safe_rollback_available)
+                )
+            )
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 lifecycle.reason,
@@ -412,7 +492,9 @@ class RootPatchStateEvaluator:
         if evidence is None:
             return self._result(RootPatchState.INVALID_UNKNOWN, "Root snapshot and seal state could not be read")
 
-        safe_known_revert = evidence.patched and metadata.recovery_evidence_present
+        metadata_revert = evidence.patched and metadata.recovery_evidence_present
+        independent_same_root_revert = evidence.recovery_required and evidence.safe_rollback_available
+        safe_known_revert = metadata_revert or independent_same_root_revert
 
         if metadata.discovery == MetadataDiscovery.INVALID:
             return self._result(
@@ -432,6 +514,7 @@ class RootPatchStateEvaluator:
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 "No trusted patch metadata exists, but the active root is not a clean sealed snapshot",
+                revert_applicable=independent_same_root_revert,
             )
 
         installed = metadata.data

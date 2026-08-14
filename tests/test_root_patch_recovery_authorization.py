@@ -21,6 +21,7 @@ from opencore_legacy_patcher.sys_patch.root_state import (
     RootPatchState,
     RootPatchStateEvaluator,
     RootStateEvidence,
+    read_root_state_evidence,
 )
 from opencore_legacy_patcher.wx_gui import gui_sys_patch_display, gui_sys_patch_start
 
@@ -152,6 +153,72 @@ class RootPatchRecoveryAuthorizationTests(unittest.TestCase):
         self.assertFalse(result.patch_authorized)
         self.assertFalse(result.recovery_authorized)
 
+    def test_missing_metadata_nonclean_root_with_same_volume_sealed_snapshot_allows_recovery(self) -> None:
+        evidence = RootStateEvidence(
+            True,
+            "Broken",
+            safe_rollback_available=True,
+            root_device_identifier="disk3s1s1",
+        )
+        result = self._evaluate(evidence)
+        self.assertEqual(result.state, RootPatchState.INVALID_UNKNOWN)
+        self.assertFalse(result.patch_authorized)
+        self.assertTrue(result.recovery_authorized)
+        self.assertIsNone(result.installed_selection)
+
+    def test_missing_metadata_nonclean_root_without_safe_snapshot_remains_fail_closed(self) -> None:
+        result = self._evaluate(RootStateEvidence(True, "Broken", safe_rollback_available=False))
+        self.assertEqual(result.state, RootPatchState.INVALID_UNKNOWN)
+        self.assertFalse(result.patch_authorized)
+        self.assertFalse(result.recovery_authorized)
+
+    def test_safe_rollback_probe_is_scoped_to_active_root_device(self) -> None:
+        root_info = plistlib.dumps({
+            "APFSSnapshot": True,
+            "Sealed": "Broken",
+            "DeviceIdentifier": "disk3s1s1",
+        })
+        root_snapshots = plistlib.dumps({
+            "Snapshots": [
+                {"SnapshotUUID": "11111111-2222-3333-4444-555555555555", "Sealed": True},
+            ],
+        })
+        with mock.patch(
+            "opencore_legacy_patcher.sys_patch.root_state.subprocess.run",
+            side_effect=[
+                types.SimpleNamespace(returncode=0, stdout=root_info),
+                types.SimpleNamespace(returncode=0, stdout=root_snapshots),
+            ],
+        ) as run:
+            evidence = read_root_state_evidence()
+        self.assertTrue(evidence.safe_rollback_available)
+        self.assertEqual(evidence.root_device_identifier, "disk3s1s1")
+        self.assertEqual(
+            run.call_args_list[1].args[0],
+            ["/usr/sbin/diskutil", "apfs", "listSnapshots", "-plist", "disk3s1s1"],
+        )
+
+    def test_snapshot_name_without_explicit_sealed_identity_is_not_recovery_evidence(self) -> None:
+        root_info = plistlib.dumps({
+            "APFSSnapshot": True,
+            "Sealed": "Broken",
+            "DeviceIdentifier": "disk3s1s1",
+        })
+        root_snapshots = plistlib.dumps({
+            "Snapshots": [
+                {"SnapshotUUID": "11111111-2222-3333-4444-555555555555", "Name": "com.apple.os.update-safe"},
+            ],
+        })
+        with mock.patch(
+            "opencore_legacy_patcher.sys_patch.root_state.subprocess.run",
+            side_effect=[
+                types.SimpleNamespace(returncode=0, stdout=root_info),
+                types.SimpleNamespace(returncode=0, stdout=root_snapshots),
+            ],
+        ):
+            evidence = read_root_state_evidence()
+        self.assertFalse(evidence.safe_rollback_available)
+
     def test_pre_lifecycle_clean_root_with_foreign_metadata_is_not_guessed(self) -> None:
         self._write({"OCLP-Mod": "v3.1.9"}, self.directory / "oclp-mod.plist")
         result = self._evaluate(RootStateEvidence(True, "Yes"))
@@ -191,6 +258,35 @@ class RootPatchRecoveryAuthorizationTests(unittest.TestCase):
         self.assertIn("System Integrity Protection", status)
         self.assertIn("Revert Root Patches is required", status)
 
+    def test_current_unknown_nonclean_state_shows_unknown_selection_and_revert(self) -> None:
+        root_state = self._evaluate(RootStateEvidence(True, "Broken", safe_rollback_available=True))
+        display = types.SimpleNamespace(
+            constants=types.SimpleNamespace(),
+            selection=RootPatchSelection(frozenset(), frozenset()),
+            selection_checkboxes={},
+            selection_summary=mock.Mock(),
+            selection_state_label=mock.Mock(),
+            start_button=mock.Mock(),
+            revert_button=mock.Mock(),
+            manual_kdk_checkbox=None,
+            manual_kdk_history_label=None,
+            _applicable_patchsets=lambda detection: (),
+        )
+        detection = types.SimpleNamespace(
+            applicable_patchsets=(),
+            patches=PATCHES,
+            device_properties={},
+            can_patch=False,
+            can_unpatch=True,
+        )
+        with mock.patch.object(gui_sys_patch_display, "HardwarePatchsetDetection", return_value=detection), \
+             mock.patch.object(gui_sys_patch_display, "RootPatchStateEvaluator") as evaluator:
+            evaluator.return_value.evaluate.return_value = root_state
+            gui_sys_patch_display.SysPatchDisplayFrame._refresh_selection_state(display)
+        display.start_button.Enable.assert_called_once_with(False)
+        display.revert_button.Enable.assert_called_once_with(True)
+        display.selection_summary.SetLabel.assert_called_once_with("Installed selection: Unknown")
+
     def test_sip_blocked_click_and_operation_refuse_before_mount(self) -> None:
         root_state = types.SimpleNamespace(
             recovery_authorized=True,
@@ -222,6 +318,25 @@ class RootPatchRecoveryAuthorizationTests(unittest.TestCase):
             patcher.start_unpatch()
         detection.detailed_errors.assert_called_once_with()
         patcher._mount_root_vol.assert_not_called()
+
+    def test_operation_revalidates_unknown_safe_recovery_before_rollback(self) -> None:
+        root_state = self._evaluate(RootStateEvidence(True, "Broken", safe_rollback_available=True))
+        patcher = sys_patch.PatchSysVolume.__new__(sys_patch.PatchSysVolume)
+        patcher.constants = types.SimpleNamespace()
+        patcher.patch_selection = None
+        patcher._mount_root_vol = mock.Mock(return_value=True)
+        patcher._unpatch_root_vol = mock.Mock()
+        detection = types.SimpleNamespace(
+            patches=PATCHES,
+            can_unpatch=True,
+        )
+        with mock.patch.object(sys_patch, "HardwarePatchsetDetection", return_value=detection), \
+             mock.patch.object(sys_patch, "RootPatchStateEvaluator") as evaluator:
+            evaluator.return_value.evaluate.return_value = root_state
+            patcher.start_unpatch()
+        evaluator.return_value.evaluate.assert_called_once_with(PATCHES)
+        patcher._mount_root_vol.assert_called_once_with()
+        patcher._unpatch_root_vol.assert_called_once_with()
 
 
 if __name__ == "__main__":

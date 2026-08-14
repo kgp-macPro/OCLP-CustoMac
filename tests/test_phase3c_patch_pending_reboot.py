@@ -10,6 +10,7 @@ from unittest import mock
 
 from opencore_legacy_patcher.support.kdk_selection import KDKSelectionMode
 from opencore_legacy_patcher.sys_patch import sys_patch
+from opencore_legacy_patcher.sys_patch.patchsets import HardwarePatchsetSettings
 from opencore_legacy_patcher.sys_patch.lifecycle import (
     LifecycleDiscovery,
     ROOT_PATCH_LIFECYCLE_FILENAME,
@@ -108,6 +109,41 @@ class PatchPendingRebootTests(unittest.TestCase):
         self.assertEqual(result.installed_selection, ("Modern Audio", "Modern Wireless"))
         self.assertEqual(result.installed_kdk_selection_mode, KDKSelectionMode.MANUAL)
         self.assertEqual(result.installed_kdk_identity.build, "25G82")
+
+    def test_in_progress_transaction_requires_recovery_and_survives_reopen(self) -> None:
+        transaction = {
+            "Transaction Schema": "KGP-Root-Patch-Transaction-v1",
+            "Requested Patches": ["Modern Wireless"],
+        }
+        store = self._store()
+        self.assertTrue(store.write(RootPatchLifecycleState.PATCH_IN_PROGRESS, transaction))
+        result = self._evaluator(store).evaluate({"Modern Wireless": {}})
+        self.assertEqual(result.state, RootPatchState.PATCH_IN_PROGRESS)
+        self.assertFalse(result.patch_authorized)
+        self.assertTrue(result.recovery_authorized)
+        self.assertIsNone(result.installed_selection)
+
+        reopened = self._store("boot-a")
+        reopened_result = self._evaluator(reopened).evaluate({"Modern Wireless": {}})
+        self.assertEqual(reopened_result.state, RootPatchState.PATCH_IN_PROGRESS)
+        self.assertTrue(reopened_result.recovery_authorized)
+
+    def test_failed_after_mutation_requires_recovery_and_survives_reopen(self) -> None:
+        transaction = {
+            "Transaction Schema": "KGP-Root-Patch-Transaction-v1",
+            "Requested Patches": ["Modern Audio", "Modern Wireless"],
+        }
+        store = self._store()
+        self.assertTrue(store.write(RootPatchLifecycleState.PATCH_FAILED_RECOVERY_REQUIRED, transaction))
+        result = self._evaluator(store).evaluate(PATCHES)
+        self.assertEqual(result.state, RootPatchState.PATCH_FAILED_RECOVERY_REQUIRED)
+        self.assertFalse(result.patch_authorized)
+        self.assertTrue(result.recovery_authorized)
+        self.assertIsNone(result.installed_selection)
+
+        reopened_result = self._evaluator(self._store("boot-a")).evaluate(PATCHES)
+        self.assertEqual(reopened_result.state, RootPatchState.PATCH_FAILED_RECOVERY_REQUIRED)
+        self.assertTrue(reopened_result.recovery_authorized)
 
     def test_patch_pending_revert_respects_existing_can_unpatch_gate(self) -> None:
         store = self._store()
@@ -262,6 +298,101 @@ class PatchPendingRebootTests(unittest.TestCase):
             RootPatchLifecycleState.PATCH_PENDING_REBOOT,
             self.metadata,
         )
+
+    def test_in_progress_and_failure_record_integrity_protected_transaction(self) -> None:
+        patcher = sys_patch.PatchSysVolume.__new__(sys_patch.PatchSysVolume)
+        patcher.constants = self.constants
+        patcher.patch_set_dictionary = {"Modern Wireless": {}}
+        lifecycle_store = mock.Mock()
+        lifecycle_store.write.return_value = True
+        with mock.patch.object(sys_patch, "RootPatchLifecycleStore", return_value=lifecycle_store):
+            self.assertTrue(patcher._record_patch_in_progress())
+            transaction = self.constants.root_patcher_pending_metadata
+            self.assertEqual(transaction["Transaction Schema"], "KGP-Root-Patch-Transaction-v1")
+            self.assertEqual(transaction["Requested Patches"], ["Modern Wireless"])
+            lifecycle_store.write.assert_called_once_with(
+                RootPatchLifecycleState.PATCH_IN_PROGRESS,
+                transaction,
+            )
+
+            lifecycle_store.reset_mock()
+            patcher._record_patch_failed()
+            lifecycle_store.write.assert_called_once_with(
+                RootPatchLifecycleState.PATCH_FAILED_RECOVERY_REQUIRED,
+                transaction,
+            )
+
+    def test_mutation_boundary_is_recorded_before_patch_execution(self) -> None:
+        patcher = sys_patch.PatchSysVolume.__new__(sys_patch.PatchSysVolume)
+        patcher.constants = types.SimpleNamespace(
+            detected_os=25,
+            detected_os_build="25G82",
+            detected_os_version="26.6.2",
+            root_patcher_succeeded=False,
+        )
+        patcher.patch_selection = mock.Mock(is_empty=mock.Mock(return_value=False))
+        patcher.expected_patch_selection = tuple(sorted(PATCHES))
+        patcher.manual_kdk_candidate = None
+        patcher._apply_hardware_details = mock.Mock()
+        patcher._mount_root_vol = mock.Mock(return_value=True)
+        patcher._run_sanity_checks = mock.Mock(return_value=True)
+        events = []
+        patcher._record_patch_in_progress = mock.Mock(side_effect=lambda: (events.append("lifecycle") or True))
+        patcher._record_patch_failed = mock.Mock()
+        patcher._unmount_root_vol = mock.Mock()
+        def fail_patch():
+            events.append("patch")
+            raise RuntimeError("KDK merge failed")
+
+        patcher._patch_root_vol = mock.Mock(side_effect=fail_patch)
+        detection = types.SimpleNamespace(
+            patches=PATCHES,
+            can_patch=True,
+            device_properties={HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED: True},
+        )
+        clean = types.SimpleNamespace(patch_allowed=True)
+        with mock.patch.object(sys_patch, "HardwarePatchsetDetection", return_value=detection), \
+             mock.patch.object(sys_patch, "RootPatchStateEvaluator") as evaluator, \
+             mock.patch.object(sys_patch, "PatcherSupportPkgMount") as support:
+            evaluator.return_value.evaluate.return_value = clean
+            support.return_value.mount.return_value = True
+            with self.assertRaisesRegex(RuntimeError, "KDK merge failed"):
+                patcher.start_patch()
+        patcher._record_patch_in_progress.assert_called_once_with()
+        patcher._record_patch_failed.assert_called_once_with()
+        self.assertEqual(events, ["lifecycle", "patch"])
+        patcher._unmount_root_vol.assert_called_once_with()
+
+    def test_lifecycle_write_failure_aborts_before_root_mutation(self) -> None:
+        patcher = sys_patch.PatchSysVolume.__new__(sys_patch.PatchSysVolume)
+        patcher.constants = types.SimpleNamespace(
+            detected_os=25,
+            detected_os_build="25G82",
+            detected_os_version="26.6.2",
+        )
+        patcher.patch_selection = mock.Mock(is_empty=mock.Mock(return_value=False))
+        patcher.expected_patch_selection = tuple(sorted(PATCHES))
+        patcher.manual_kdk_candidate = None
+        patcher._apply_hardware_details = mock.Mock()
+        patcher._mount_root_vol = mock.Mock(return_value=True)
+        patcher._run_sanity_checks = mock.Mock(return_value=True)
+        patcher._record_patch_in_progress = mock.Mock(return_value=False)
+        patcher._unmount_root_vol = mock.Mock()
+        patcher._patch_root_vol = mock.Mock()
+        detection = types.SimpleNamespace(
+            patches=PATCHES,
+            can_patch=True,
+            device_properties={HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED: True},
+        )
+        clean = types.SimpleNamespace(patch_allowed=True)
+        with mock.patch.object(sys_patch, "HardwarePatchsetDetection", return_value=detection), \
+             mock.patch.object(sys_patch, "RootPatchStateEvaluator") as evaluator, \
+             mock.patch.object(sys_patch, "PatcherSupportPkgMount") as support:
+            evaluator.return_value.evaluate.return_value = clean
+            support.return_value.mount.return_value = True
+            patcher.start_patch()
+        patcher._patch_root_vol.assert_not_called()
+        patcher._unmount_root_vol.assert_called_once_with()
 
     def test_revert_recording_preserves_pending_metadata_and_changes_state(self) -> None:
         patcher = sys_patch.PatchSysVolume.__new__(sys_patch.PatchSysVolume)
