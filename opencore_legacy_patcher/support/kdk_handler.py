@@ -21,6 +21,7 @@ from . import (
     network_handler,
     subprocess_wrapper
 )
+from .kdk_selection import KernelDebugKitCandidate
 
 KDK_INSTALL_PATH: str  = "/Library/Developer/KDKs"
 KDK_INFO_PLIST:   str  = "KDKInfo.plist"
@@ -127,6 +128,47 @@ class KernelDebugKitObject:
         KDK_ASSET_LIST = results.json()
 
         return KDK_ASSET_LIST
+
+
+    def available_candidates(self) -> tuple[KernelDebugKitCandidate, ...]:
+        """Return immutable candidates from the trusted KdkSupportPkg catalog."""
+        catalog = self._get_remote_kdks()
+        if catalog is None:
+            return ()
+        candidates = []
+        for entry in catalog:
+            try:
+                candidates.append(KernelDebugKitCandidate.from_catalog_entry(entry))
+            except (KeyError, TypeError, ValueError):
+                continue
+        return tuple(candidates)
+
+
+    def resolved_candidate(self) -> KernelDebugKitCandidate | None:
+        """Expose the existing automatic resolver result without starting an action."""
+        if not all((self.kdk_url_version, self.kdk_url_build, self.kdk_url)):
+            return None
+        return KernelDebugKitCandidate(
+            version=self.kdk_url_version,
+            build=self.kdk_url_build,
+            url=self.kdk_url,
+            file_size=self.kdk_url_expected_size,
+        )
+
+
+    def installed_path_for_build(self, build: str) -> Path | None:
+        """Read-only installed-KDK lookup for dialog status annotation."""
+        install_root = Path(KDK_INSTALL_PATH)
+        if not install_root.exists():
+            return None
+        for kdk_folder in install_root.iterdir():
+            if not kdk_folder.is_dir():
+                continue
+            if not kdk_folder.name.endswith(f"{build}.kdk"):
+                continue
+            if self._local_kdk_valid(kdk_folder):
+                return kdk_folder
+        return None
 
 
     def _get_latest_kdk(self, host_build: str = None, host_version: str = None) -> None:

@@ -18,6 +18,7 @@ from ..support import (
     kdk_handler,
     metallib_handler
 )
+from ..support.kdk_selection import KernelDebugKitCandidate
 from ..sys_patch import (
     sys_patch,
 )
@@ -47,6 +48,7 @@ class SysPatchStartFrame(wx.Frame):
         patches: dict = None,
         patch_selection: RootPatchSelection = None,
         expected_patch_selection: tuple[str, ...] = None,
+        manual_kdk_candidate: KernelDebugKitCandidate = None,
     ):
         logging.info("Initializing Root Patching Frame")
 
@@ -58,6 +60,7 @@ class SysPatchStartFrame(wx.Frame):
         self.patches: dict = patches or {}
         self.patch_selection = patch_selection
         self.expected_patch_selection = expected_patch_selection
+        self.manual_kdk_candidate = manual_kdk_candidate
 
         super(SysPatchStartFrame, self).__init__(parent, title=title, size=(350, 200), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
         gui_support.GenerateMenubar(self, self.constants).generate()

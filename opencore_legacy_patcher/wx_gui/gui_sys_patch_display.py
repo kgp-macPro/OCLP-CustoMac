@@ -8,7 +8,8 @@ import threading
 
 from .. import constants
 
-from ..sys_patch.patchsets import HardwarePatchsetDetection, HardwarePatchsetValidation
+from ..support.kdk_selection import KDKSelectionContext, ManualKDKSelectionState
+from ..sys_patch.patchsets import HardwarePatchsetDetection, HardwarePatchsetSettings, HardwarePatchsetValidation
 from ..sys_patch.root_selection import (
     EMPTY_SELECTION_MESSAGE,
     SELECTABLE_ROOT_PATCHES,
@@ -20,6 +21,7 @@ from ..sys_patch.root_state import semantic_patch_selection
 
 from ..wx_gui import (
     gui_main_menu,
+    gui_kdk_selection,
     gui_support,
     gui_sys_patch_start,
 )
@@ -49,6 +51,8 @@ class SysPatchDisplayFrame(wx.Frame):
         self.selection_checkboxes: dict[SelectableRootPatch, wx.CheckBox] = {}
         self.selection_summary: wx.StaticText = None
         self.selection_state_label: wx.StaticText = None
+        self.manual_kdk_checkbox: wx.CheckBox = None
+        self.manual_kdk_state = ManualKDKSelectionState()
         self.start_button: wx.Button = None
         self.revert_button: wx.Button = None
         self.current_detection: HardwarePatchsetDetection = None
@@ -247,7 +251,16 @@ class SysPatchDisplayFrame(wx.Frame):
         self.selection_summary.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_BOLD))
         self.selection_summary.Centre(wx.HORIZONTAL)
 
-        self.selection_state_label = wx.StaticText(frame, label="", pos=(-1, self.selection_summary.GetPosition().y + 22))
+        self.manual_kdk_checkbox = wx.CheckBox(
+            frame,
+            label="Manually select Kernel Debug Kit",
+            pos=(35, self.selection_summary.GetPosition().y + 25),
+        )
+        self.manual_kdk_checkbox.SetFont(gui_support.font_factory(12, wx.FONTWEIGHT_NORMAL))
+        self.manual_kdk_checkbox.SetToolTip("Choose a specific macOS Tahoe KDK for this patch operation.")
+        self.manual_kdk_checkbox.Bind(wx.EVT_CHECKBOX, self.on_manual_kdk_changed)
+
+        self.selection_state_label = wx.StaticText(frame, label="", pos=(-1, self.manual_kdk_checkbox.GetPosition().y + 28))
         self.selection_state_label.SetFont(gui_support.font_factory(12, wx.FONTWEIGHT_NORMAL))
         self.selection_state_label.Wrap(330)
         self.selection_state_label.Centre(wx.HORIZONTAL)
@@ -276,6 +289,21 @@ class SysPatchDisplayFrame(wx.Frame):
         self.current_detection = detection
         self.requested_patchset = requested_patchset
         self.root_state = root_state
+
+        kdk_required = bool(
+            getattr(detection, "device_properties", {}).get(
+                HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED,
+                False,
+            )
+        )
+        self.manual_kdk_state = getattr(
+            self,
+            "manual_kdk_state",
+            ManualKDKSelectionState(),
+        ).for_requirement(kdk_required)
+        if getattr(self, "manual_kdk_checkbox", None) is not None:
+            self.manual_kdk_checkbox.Enable(kdk_required)
+            self.manual_kdk_checkbox.SetValue(self.manual_kdk_state.enabled)
         self._refresh_selection_state()
 
         # Set frame size
@@ -331,6 +359,40 @@ class SysPatchDisplayFrame(wx.Frame):
         self.frame_modal.Layout()
 
 
+    def on_manual_kdk_changed(self, event: wx.Event) -> None:
+        kdk_required = bool(
+            self.current_detection.device_properties[HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED]
+        )
+        self.manual_kdk_state = self.manual_kdk_state.with_enabled(event.IsChecked(), kdk_required)
+        self._refresh_selection_state()
+        self.frame_modal.Layout()
+
+
+    def _select_manual_kdk(self):
+        try:
+            context = KDKSelectionContext.from_system(self.constants)
+        except Exception as error:
+            logging.error(f"Unable to load the trusted KDK catalog: {error}")
+            wx.MessageBox(
+                "The official Kernel Debug Kit catalog could not be loaded.",
+                "Kernel Debug Kit Selection Unavailable",
+                wx.OK | wx.ICON_ERROR,
+            )
+            return None
+        if not context.candidates:
+            wx.MessageBox(
+                "No eligible macOS Tahoe Kernel Debug Kits are currently available.",
+                "Kernel Debug Kit Selection Unavailable",
+                wx.OK | wx.ICON_ERROR,
+            )
+            return None
+        dialog = gui_kdk_selection.ManualKDKSelectionDialog(self.frame_modal, context)
+        try:
+            return dialog.select_candidate()
+        finally:
+            dialog.Destroy()
+
+
     def on_start_root_patching(self, event: wx.Event = None):
         self._refresh_selection_state()
         if not self.requested_patchset:
@@ -347,6 +409,26 @@ class SysPatchDisplayFrame(wx.Frame):
             logging.error(self.root_state.reason)
             wx.MessageBox(self.root_state.reason, "Root Patching Blocked", wx.OK | wx.ICON_WARNING)
             return
+        manual_kdk_candidate = None
+        if getattr(self, "manual_kdk_state", ManualKDKSelectionState()).enabled:
+            manual_kdk_candidate = self._select_manual_kdk()
+            if manual_kdk_candidate is None:
+                return
+            self.manual_kdk_state = self.manual_kdk_state.with_candidate(manual_kdk_candidate)
+            self._refresh_selection_state()
+            if (
+                self.manual_kdk_state.enabled is False
+                or self.current_detection.device_properties[HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED] is False
+                or self.current_detection.can_patch is False
+                or self.root_state.patch_allowed is False
+                or not self.requested_patchset
+            ):
+                wx.MessageBox(
+                    "Root patch applicability or selection changed. Return to Root Patch Selection and review the current request.",
+                    "Root Patching Blocked",
+                    wx.OK | wx.ICON_WARNING,
+                )
+                return
         frame = gui_sys_patch_start.SysPatchStartFrame(
             parent=None,
             title=self.title,
@@ -354,6 +436,7 @@ class SysPatchDisplayFrame(wx.Frame):
             patches=self.current_detection.device_properties,
             patch_selection=self.selection,
             expected_patch_selection=semantic_patch_selection(self.requested_patchset),
+            manual_kdk_candidate=manual_kdk_candidate,
         )
         self.frame_modal.Hide()
         self.frame_modal.Destroy()
