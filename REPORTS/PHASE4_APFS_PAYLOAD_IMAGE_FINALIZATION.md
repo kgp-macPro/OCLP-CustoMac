@@ -165,20 +165,31 @@ Validation results:
 
 ## Signing and Keychain isolation
 
-The validation audit identified one discarded command that caused the observed macOS password/Keychain prompts:
+The validation audit identified two discarded ad hoc command forms that caused the observed macOS password/Keychain prompts:
 
 ```text
 hdiutil imageinfo <image>
+hdiutil verify Universal-Binaries.dmg
 ```
 
-It was invoked against the encrypted payload image without `-stdinpass`. DiskImages consequently attempted interactive agent/Keychain authentication and returned `Authentication error`; repeating the same unsuitable inspection form across the validation images produced the repeated prompts. This was an ad hoc inspection mistake, not part of the application or package build path. Its output was discarded, and it made no image, Keychain, or source change.
+They were invoked against protected images without `-stdinpass`. DiskImages consequently attempted interactive agent/Keychain authentication and returned or awaited an authentication result. These were ad hoc inspection mistakes, not part of the application or package build path. Their output was discarded, the operations were stopped, and they made no image, Keychain, or source change.
 
 The replacement validation is noninteractive with respect to Keychain:
 
-- encrypted `payloads.dmg` is verified with `hdiutil verify -stdinpass`, with the fixed build-image passphrase supplied directly to the process;
-- the selected image completed native verification with valid checksums and no Keychain prompt;
-- unencrypted `Universal-Binaries.dmg` completed native read-only verification without credentials or a prompt;
-- mount validation supplies the fixed image passphrase explicitly and uses the established temporary mountpoint/shadow workflow.
+- both `payloads.dmg` and `Universal-Binaries.dmg` are verified with `hdiutil verify -stdinpass`, with the fixed build-image passphrase supplied from process start in hdiutil's required newline-free form;
+- both images completed native checksum verification with no GUI prompt;
+- both mount validations supply the fixed image passphrase explicitly and use the established temporary mountpoint/shadow workflow;
+- both mounted as APFS with their expected labels, exposed readable contents, and detached cleanly;
+- no Phase-4 project disk image remained mounted after validation.
+
+An exhaustive source/workflow search found that the repository paths were already noninteractive:
+
+- `disk_images.py` creates `payloads.dmg` with `-passphrase password -encryption`;
+- `reroute_payloads.py` opens `payloads.dmg` with the fixed passphrase;
+- `sys_patch/utilities/dmg_mount.py` opens `Universal-Binaries.dmg` with the fixed passphrase;
+- `support/validation.py` also opens `Universal-Binaries.dmg` with the fixed passphrase;
+- the application build embeds both DMGs as ordinary resources and does not open them;
+- no repository helper runs `imageinfo` or an unqualified `verify` on either image.
 
 The signing path was independently proven unrelated to the prompts:
 
@@ -190,7 +201,7 @@ The signing path was independently proven unrelated to the prompts:
 - both installer packages report `Status: no signature`;
 - strict/deep checks use only read-only `codesign --verify --strict --deep` and passed without authorization.
 
-No `security` command, Keychain import/unlock/authorization, named `codesign` identity, `productsign` identity, or personal signing key was used. The login and System Keychains were neither accessed intentionally nor modified.
+No `security` command, Keychain import/unlock/authorization, named `codesign` identity, `productsign` identity, or personal signing key was used. The failed ad hoc commands allowed DiskImages to request interactive authentication, which is precisely the path removed from validation. The replacement regression run attempted no Keychain operation, displayed no GUI authentication prompt, and did not modify the login or System Keychain.
 
 ## Phase-2/Phase-3 freeze proof
 
