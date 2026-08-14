@@ -35,6 +35,7 @@ class InstalledSelectionReadOnlyTests(unittest.TestCase):
             reason=f"State: {state.value}",
             patch_allowed=state == RootPatchState.CLEAN,
             revert_allowed=lambda can_unpatch: state in {
+                RootPatchState.PATCH_PENDING_REBOOT,
                 RootPatchState.INSTALLED_SAME,
                 RootPatchState.INSTALLED_DIFFERENT_PATCH_SET,
                 RootPatchState.INSTALLED_DIFFERENT_BUILD,
@@ -173,6 +174,25 @@ class InstalledSelectionReadOnlyTests(unittest.TestCase):
         display.selection_summary.SetLabel.assert_called_once_with("Installed: Modern Wi-Fi + Modern Audio")
         manual_history.SetLabel.assert_called_once_with("macOS 26.6.2 — Build 25G82")
         manual_history.Show.assert_called_once_with(True)
+
+    def test_patch_pending_reboot_is_read_only_with_safe_revert_and_manual_history(self) -> None:
+        state = self._state(
+            RootPatchState.PATCH_PENDING_REBOOT,
+            ("Modern Audio", "Modern Wireless"),
+            KDKSelectionMode.MANUAL,
+            KDK_IDENTITY,
+        )
+        display, wifi, audio, manual, manual_history = self._refresh(state)
+        wifi.SetValue.assert_called_once_with(True)
+        audio.SetValue.assert_called_once_with(True)
+        wifi.Enable.assert_called_once_with(False)
+        audio.Enable.assert_called_once_with(False)
+        manual.SetValue.assert_called_once_with(True)
+        manual.Enable.assert_called_once_with(False)
+        manual_history.SetLabel.assert_called_once_with("macOS 26.6.2 — Build 25G82")
+        manual_history.Show.assert_called_once_with(True)
+        display.start_button.Enable.assert_called_once_with(False)
+        display.revert_button.Enable.assert_called_once_with(True)
 
     def test_simulated_reboot_to_clean_makes_controls_editable_again(self) -> None:
         display, wifi, audio, manual, manual_history = self._display(

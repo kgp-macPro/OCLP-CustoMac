@@ -80,6 +80,8 @@ from . import (
 from .auto_patcher import InstallAutomaticPatchingServices
 from .root_selection import EMPTY_SELECTION_MESSAGE, RootPatchSelection
 from .root_state import ROOT_PATCH_METADATA_FILENAME, RootPatchStateEvaluator, semantic_patch_selection
+from .root_state import ROOT_PATCH_METADATA_PATH
+from .lifecycle import LifecycleDiscovery, RootPatchLifecycleState, RootPatchLifecycleStore
 
 
 class PatchSysVolume:
@@ -102,6 +104,7 @@ class PatchSysVolume:
         self.patch_selection = patch_selection
         self.expected_patch_selection = expected_patch_selection
         self.manual_kdk_candidate = manual_kdk_candidate
+        self.installed_patch_metadata = None
         self.needs_kmutil_exemptions = False # For '/Library/Extensions' rebuilds
         self.kdk_path = None
         self.metallib_path = None
@@ -231,7 +234,7 @@ class PatchSysVolume:
         ).clean_auxiliary_kc()
 
         self.constants.root_patcher_succeeded = True
-        self.constants.root_patcher_revert_pending = True
+        self._record_revert_pending()
         logging.info("- Unpatching complete")
         logging.info("\nPlease reboot the machine for patches to take effect")
 
@@ -379,6 +382,45 @@ class PatchSysVolume:
             if Path(destination_path_file).exists():
                 subprocess_wrapper.run_as_root_and_verify(["/bin/rm", destination_path_file], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             subprocess_wrapper.run_as_root_and_verify(generate_copy_arguments(f"{self.constants.payload_path}/{file_name}", destination_path), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            with Path(self.constants.payload_path, file_name).open("rb") as metadata_file:
+                self.installed_patch_metadata = plistlib.load(metadata_file)
+
+
+    def _record_patch_pending(self) -> None:
+        metadata = getattr(self, "installed_patch_metadata", None)
+        self.constants.root_patcher_patch_pending = True
+        self.constants.root_patcher_revert_pending = False
+        self.constants.root_patcher_pending_metadata = metadata if isinstance(metadata, dict) else None
+        if not isinstance(metadata, dict):
+            logging.error("- Root patching succeeded, but pending operation metadata is unavailable")
+            return
+        if RootPatchLifecycleStore(self.constants).write(
+            RootPatchLifecycleState.PATCH_PENDING_REBOOT,
+            metadata,
+        ) is False:
+            logging.error("- Root patching succeeded, but persistent pending-reboot evidence could not be recorded")
+
+
+    def _record_revert_pending(self) -> None:
+        metadata = getattr(self.constants, "root_patcher_pending_metadata", None)
+        lifecycle_store = RootPatchLifecycleStore(self.constants)
+        if not isinstance(metadata, dict):
+            lifecycle = lifecycle_store.read()
+            if lifecycle.discovery == LifecycleDiscovery.VALID:
+                metadata = lifecycle.record.installed_metadata
+        if not isinstance(metadata, dict) and ROOT_PATCH_METADATA_PATH.exists():
+            try:
+                with ROOT_PATCH_METADATA_PATH.open("rb") as metadata_file:
+                    metadata = plistlib.load(metadata_file)
+            except (OSError, plistlib.InvalidFileException, TypeError, ValueError):
+                metadata = None
+
+        self.constants.root_patcher_patch_pending = False
+        self.constants.root_patcher_revert_pending = True
+        self.constants.root_patcher_pending_metadata = metadata if isinstance(metadata, dict) else None
+        if isinstance(metadata, dict):
+            if lifecycle_store.write(RootPatchLifecycleState.REVERT_PENDING, metadata) is False:
+                logging.error("- Reversion succeeded, but persistent pending-reboot evidence could not be recorded")
 
 
     def _patch_root_vol(self):
@@ -664,6 +706,8 @@ class PatchSysVolume:
             return
 
         self._patch_root_vol()
+        if self.constants.root_patcher_succeeded is True:
+            self._record_patch_pending()
 
 
     def start_unpatch(self) -> None:

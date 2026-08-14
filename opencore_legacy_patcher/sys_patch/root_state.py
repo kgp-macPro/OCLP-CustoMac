@@ -12,6 +12,12 @@ from pathlib import Path
 from typing import Callable
 
 from ..support.kdk_selection import KDKSelectionMode, KernelDebugKitIdentity
+from .lifecycle import (
+    LifecycleDiscovery,
+    ROOT_PATCH_LIFECYCLE_FILENAME,
+    RootPatchLifecycleState,
+    RootPatchLifecycleStore,
+)
 
 
 ROOT_PATCH_METADATA_FILENAME = "OpenCore-Legacy-Patcher.plist"
@@ -30,6 +36,7 @@ FULL_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 class RootPatchState(StrEnum):
     CLEAN = "clean"
+    PATCH_PENDING_REBOOT = "patch-pending-reboot-required"
     INSTALLED_SAME = "installed-same"
     INSTALLED_DIFFERENT_PATCH_SET = "installed-different-patch-set"
     INSTALLED_DIFFERENT_BUILD = "installed-different-build"
@@ -145,10 +152,18 @@ class RootPatchStateEvaluator:
         *,
         metadata_path: Path = ROOT_PATCH_METADATA_PATH,
         evidence_reader: Callable[[], RootStateEvidence | None] = read_root_state_evidence,
+        lifecycle_store: RootPatchLifecycleStore | None = None,
     ) -> None:
         self.constants = global_constants
         self.metadata_path = metadata_path
         self.evidence_reader = evidence_reader
+        lifecycle_path = None
+        if metadata_path != ROOT_PATCH_METADATA_PATH:
+            lifecycle_path = metadata_path.parent / ROOT_PATCH_LIFECYCLE_FILENAME
+        self.lifecycle_store = lifecycle_store or RootPatchLifecycleStore(
+            global_constants,
+            **({"path": lifecycle_path} if lifecycle_path is not None else {}),
+        )
 
     def _discover_metadata(self) -> MetadataResult:
         directory = self.metadata_path.parent
@@ -262,18 +277,83 @@ class RootPatchStateEvaluator:
         mode, kdk_identity = installed_kdk_provenance(installed)
         return tuple(sorted(selection)), mode, kdk_identity
 
+    def _pending_lifecycle_result(
+        self,
+        lifecycle_state: RootPatchLifecycleState,
+        installed_metadata: dict | None,
+    ) -> RootPatchStateResult:
+        metadata = MetadataResult(
+            MetadataDiscovery.CANONICAL,
+            installed_metadata if isinstance(installed_metadata, dict) else None,
+            "Pending operation metadata",
+            True,
+        )
+        installed_selection, kdk_mode, kdk_identity = self._trusted_installed_history(metadata)
+        if installed_selection is None:
+            return self._result(
+                RootPatchState.INVALID_UNKNOWN,
+                "A completed root-patch lifecycle is pending reboot, but its installed operation metadata is not trustworthy",
+                revert_applicable=True,
+            )
+        if lifecycle_state == RootPatchLifecycleState.PATCH_PENDING_REBOOT:
+            return self._result(
+                RootPatchState.PATCH_PENDING_REBOOT,
+                "Root patching completed successfully; reboot to use the new patched snapshot, or revert before rebooting",
+                revert_applicable=True,
+                installed_selection=installed_selection,
+                installed_kdk_selection_mode=kdk_mode,
+                installed_kdk_identity=kdk_identity,
+            )
+        return self._result(
+            RootPatchState.REVERT_PENDING,
+            "Root patch reversion succeeded; reboot into the restored sealed snapshot before patching again",
+            installed_selection=installed_selection,
+            installed_kdk_selection_mode=kdk_mode,
+            installed_kdk_identity=kdk_identity,
+        )
+
     def evaluate(self, requested_patches: dict) -> RootPatchStateResult:
         evidence = self.evidence_reader()
         metadata = self._discover_metadata()
 
         if getattr(self.constants, "root_patcher_revert_pending", False) is True:
-            installed_selection, kdk_mode, kdk_identity = self._trusted_installed_history(metadata)
+            pending_metadata = getattr(self.constants, "root_patcher_pending_metadata", None)
+            if not isinstance(pending_metadata, dict) and metadata.discovery == MetadataDiscovery.CANONICAL:
+                pending_metadata = metadata.data
+            if not isinstance(pending_metadata, dict):
+                return self._result(
+                    RootPatchState.REVERT_PENDING,
+                    "Root patch reversion succeeded; reboot into the restored sealed snapshot before patching again",
+                )
+            return self._pending_lifecycle_result(
+                RootPatchLifecycleState.REVERT_PENDING,
+                pending_metadata,
+            )
+        if getattr(self.constants, "root_patcher_patch_pending", False) is True:
+            pending_metadata = getattr(self.constants, "root_patcher_pending_metadata", None)
+            if not isinstance(pending_metadata, dict):
+                return self._result(
+                    RootPatchState.PATCH_PENDING_REBOOT,
+                    "Root patching completed successfully; reboot to use the new patched snapshot, or revert before rebooting",
+                    revert_applicable=True,
+                )
+            return self._pending_lifecycle_result(
+                RootPatchLifecycleState.PATCH_PENDING_REBOOT,
+                pending_metadata,
+            )
+
+        lifecycle = self.lifecycle_store.read()
+        if lifecycle.discovery == LifecycleDiscovery.INVALID:
+            safe_known_revert = bool(evidence and evidence.patched and metadata.known_patch_metadata_present)
             return self._result(
-                RootPatchState.REVERT_PENDING,
-                "Root patch reversion succeeded; reboot into the restored sealed snapshot before patching again",
-                installed_selection=installed_selection,
-                installed_kdk_selection_mode=kdk_mode,
-                installed_kdk_identity=kdk_identity,
+                RootPatchState.INVALID_UNKNOWN,
+                lifecycle.reason,
+                revert_applicable=safe_known_revert,
+            )
+        if lifecycle.discovery == LifecycleDiscovery.VALID:
+            return self._pending_lifecycle_result(
+                lifecycle.record.state,
+                lifecycle.record.installed_metadata,
             )
 
         if evidence is None:
