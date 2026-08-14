@@ -1,191 +1,189 @@
-# Root Patch Recovery and Darwin 26 KDK Implementation
+# Phase 3C Recovery Hotfix and Darwin 26 KDK Eligibility
 
-## Scope and baseline
+## Baseline and result
 
-Implementation started from clean source commit:
+The hotfix was developed in the remote-free primary repository from the documentation checkpoint:
 
-`4fe8f1326b4f293537f989479675b9588bbfabf3`
+`aecdd7e0c87ab53d76286c5d39bf27da3cb396c6`
 
-The only pre-existing working-tree item was the completed, untracked audit report:
-
-`REPORTS/ROOT_PATCH_REVERT_SAFETY_AUDIT.md`
-
-No production, upstream, OCLP-Plus, OCLP-Mod, EFI, NVRAM, hardware, package, or installed root-patch state was modified.
-
-The clean implementation HEAD after the two source commits is:
+Its validated implementation parent was:
 
 `53c44be749e77d830b4ee5ba733321f40d31ec02`
 
-## Implementation commits
+The clean implementation HEAD used to build the runtime artifact is:
 
-1. `8351c95de20810390bf192d391c3707b2b7f9723` — `state: preserve evidence-backed root recovery`
-2. `53c44be749e77d830b4ee5ba733321f40d31ec02` — `kdk: prohibit Darwin 26 root patch kits`
+`62e0b1c0413eb900bda69955030dd5bee28219b6`
 
-A documentation-only checkpoint commits this report and the completed audit separately from implementation. Its SHA is reported in the final handoff.
+The implementation commits are:
 
-## Exact files changed
+1. `c1d5e05c3cad7de12af738725136a53030183088` — `kdk: validate root patch eligibility by build family`
+2. `448d652d20d081856dcfc564b286b3887e52f127` — `state: preserve recovery after partial root patching`
+3. `62e0b1c0413eb900bda69955030dd5bee28219b6` — `state: authorize common revert for blocked roots`
+
+The third commit deliberately supersedes the more restrictive recovery-evidence policy initially implemented in the second commit. Lifecycle records remain useful state/provenance information, but are not Revert authorization prerequisites.
+
+## Exact tracked implementation changes
 
 Runtime source:
 
 - `opencore_legacy_patcher/support/kdk_handler.py`
 - `opencore_legacy_patcher/support/kdk_selection.py`
+- `opencore_legacy_patcher/sys_patch/lifecycle.py`
 - `opencore_legacy_patcher/sys_patch/root_state.py`
 - `opencore_legacy_patcher/sys_patch/sys_patch.py`
 - `opencore_legacy_patcher/sys_patch/utilities/kdk_merge.py`
-- `opencore_legacy_patcher/wx_gui/gui_sys_patch_display.py`
 
 Tests:
 
 - `tests/test_darwin26_kdk_policy.py`
-- `tests/test_modern_wireless_regression.py`
+- `tests/test_phase2b_root_state_protection.py`
+- `tests/test_phase3c_patch_pending_reboot.py`
 - `tests/test_root_patch_recovery_authorization.py`
-- `tests/test_phase3b_empty_selection_guard.py`
-- `tests/test_phase3c_installed_selection_readonly.py`
-- `tests/test_phase3c_manual_kdk_gui.py`
-- `tests/test_phase3c_manual_kdk_resolver.py`
 
-Reports:
+No other tracked implementation file changed.
 
-- `REPORTS/ROOT_PATCH_REVERT_SAFETY_AUDIT.md`
-- `REPORTS/ROOT_PATCH_RECOVERY_AND_DARWIN26_KDK_IMPLEMENTATION.md`
+## Darwin 26 KDK false-positive: cause and correction
 
-## Root-state authorization model
+The installed-KDK fast path can reach `kdk_merge.py` with `kdk_url_build` empty. The former merge guard treated that absent catalog field as a prohibited Darwin 26 identity and raised the misleading exception even though the installed KDK was `KDK_26.6.2_25G82.kdk`. It thereby conflated missing catalog identity and the KDK's marketing/product version with the Apple `ProductBuildVersion` family.
 
-### Before
+The correction uses one canonical eligibility rule based on the real Apple build identifier:
 
-The state classifier already computed strict `patch_allowed` and evidence-sensitive `revert_applicable`, but the GUI collapsed recovery authorization and SIP executability into one result:
+- `26A...` and all build identifiers whose parsed Darwin major is 26 are prohibited;
+- `25...`, `24...`, and older build families remain permitted;
+- a macOS product version such as `26.6.2` is not accepted as a build identity and cannot itself trigger the Darwin 26 prohibition.
 
-`Revert enabled = revert_applicable AND can_unpatch`
+The trusted KdkSupportPkg manifest is filtered once before the inherited AUTO exact/closest resolver. The resolver's ranking semantics are unchanged. Manual candidates, installed/local candidates, download selection, pre-install/operation validation, and the merge-time defense all reuse the same canonical rule.
 
-A positively identified installed or pending patched state could therefore show both Start and Revert disabled when SIP did not currently permit the rollback operation. The operation layer also checked `can_unpatch` before explaining whether the current root state authorized recovery.
+For an already installed KDK, the merge guard reads `System/Library/CoreServices/SystemVersion.plist` and validates its actual `ProductBuildVersion`. Thus `KDK_26.6.2_25G82.kdk` resolves to `25G82` and is permitted, while `KDK_26.7_26A5368g.kdk` resolves to `26A5368g` and is rejected. A missing or malformed build identity fails closed with a distinct identity error rather than a false Darwin 26 diagnosis.
 
-### After
+Rejected catalog logging is intentionally concise, for example:
 
-`RootPatchStateResult` now exposes the meanings explicitly:
+`Ignoring prohibited Darwin 26 KDK: 26A5368g (26.7)`
 
-- `patch_authorized`: root-state authorization to start patching;
-- `recovery_authorized`: positive root-state evidence authorizing recovery;
-- `revert_allowed(can_unpatch)`: recovery is authorized and the SIP-derived execution prerequisite currently passes.
+The complete catalog record and its large `kernel_versions` structure are not logged.
 
-The compatibility fields `patch_allowed` and `revert_applicable` remain intact. Existing state-classification semantics were not removed.
+## Root recovery deadlock: cause and final policy
 
-The UI applies the layers independently:
+The deadlock was policy-created rather than required by the rollback engine. Recovery authorization had become conditional on positive metadata ownership, recognized patch provenance, or a boot-session lifecycle record. A partial operation with no trusted installed selection could therefore be classified `INVALID_UNKNOWN`, block new patching, and also hide Revert even though the common OCLP rollback operation remained the appropriate recovery action.
 
-1. Root state decides which operation is authorized.
-2. Patch selection and other runtime requirements may disable Start without creating recovery authorization.
-3. An evidence-backed recovery state keeps Revert visible/enabled even if SIP currently blocks execution.
-4. Clicking Revert revalidates state and then refuses execution with a concrete SIP prerequisite message when `can_unpatch` is false.
-5. `PatchSysVolume.start_unpatch()` independently reevaluates root state first, then enforces `can_unpatch`, then mounts and uses the unchanged rollback engine.
+The final model separates root-state authorization from GUI selection prerequisites:
 
-This prevents a silent Patch-off/Revert-off deadlock for positively identified installed or pending patch states without enabling Revert on a clean system merely because both patch-selection toggles are off.
+- `patch_authorized` is true only for `CLEAN`;
+- `recovery_authorized` is true for every non-clean/blocking root state except `REVERT_PENDING`, where the revert has already completed and reboot is required;
+- Wi-Fi/Audio selection may independently disable Start on a clean root and never creates recovery authorization.
 
-### State behavior
+Accordingly, Revert is no longer gated by:
 
-| Root state/evidence | Patch authorized | Recovery authorized | Notes |
-|---|---:|---:|---|
-| `CLEAN` | Yes | No | Empty user selection may disable the Start button, but does not enable Revert. |
-| `PATCH_PENDING_REBOOT` | No | Yes | Applies equally to AUTO-KDK, MANUAL-KDK, and no-KDK patch operations. |
-| `INSTALLED_SAME` | No | Yes | Installed current build/selection is read-only and revertable. |
-| `INSTALLED_DIFFERENT_PATCH_SET` | No | Yes | Revert, reboot, then repatch remains required. |
-| `INSTALLED_DIFFERENT_BUILD` | No | Yes | Exact SHA mismatch still blocks patching but not evidence-backed rollback. |
-| recognized OCLP-family metadata + active patched root | No | Yes | Recovery only; never treated as current/equal KGP metadata. |
-| `REVERT_PENDING` | No | No | Reboot is required; another patch or revert is not authorized. |
-| malformed/ambiguous/unknown without independent recovery evidence | No | No | Fail closed; no snapshot scanning or guessing. |
+- matching Git commit or application build;
+- matching project, fork, or OCLP-family identity;
+- matching installed patch dictionary or requested patch set;
+- KDK identity or AUTO/MANUAL/no-KDK provenance;
+- trusted installed-selection metadata;
+- lifecycle-record presence.
 
-Valid boot-scoped lifecycle evidence remains authoritative before the first reboot and remains consumable by another same-lineage KGP build without exact SHA equality. The lifecycle mechanism remains independent of AUTO/MANUAL/no-KDK provenance.
+The resulting root-state policy is:
 
-## SIP and `can_unpatch`
+| Root state | Patch authorized | Recovery authorized |
+|---|---:|---:|
+| `CLEAN` | Yes | No |
+| `PATCH_PENDING_REBOOT` | No | Yes |
+| `PATCH_IN_PROGRESS` | No | Yes |
+| `PATCH_FAILED_RECOVERY_REQUIRED` | No | Yes |
+| `INSTALLED_SAME` | No | Yes |
+| `INSTALLED_DIFFERENT_PATCH_SET` | No | Yes |
+| `INSTALLED_DIFFERENT_BUILD` | No | Yes |
+| `LEGACY_FOREIGN` | No | Yes |
+| `INVALID_UNKNOWN` | No | Yes |
+| `REVERT_PENDING` | No | No; reboot is required |
 
-SIP enforcement was not weakened.
+This means the already-existing pre-lifecycle failed state is recoverable without fabricating installed metadata. The GUI may continue to show `Installed selection: Unknown`, keeps Start disabled, and exposes Revert. There is no requirement to know which patch set, build, fork, or KDK produced the state.
 
-For a recovery-authorized state with `can_unpatch == False`:
+No APFS snapshot discovery engine was added. The code does not enumerate arbitrary snapshots, inspect unrelated volumes, guess snapshot names, delete snapshots, or change APFS structures.
 
-- Start remains disabled;
-- Revert remains visibly identifiable as the required recovery path;
-- the state text explains that current System Integrity Protection settings prevent execution;
-- clicking Revert starts no mount or rollback and displays the prerequisite;
-- direct/internal operation entry revalidates the root state, logs the SIP block, emits existing detailed requirement errors, and stops before mounting.
+## True Revert execution prerequisites
 
-Mount, `bless --last-sealed-snapshot`, cleanup, and snapshot semantics are unchanged.
+Authorization to offer recovery is distinct from permission and ability to execute it. The following existing technical checks remain:
 
-## OCLP-family metadata compatibility
+1. Display-, click-, and operation-time root-state revalidation.
+2. SIP-derived `can_unpatch` validation.
+3. Mounting the intended System/root volume through the existing patcher path.
+4. The existing common rollback implementation using `bless --mount <volume> --bootefi --last-sealed-snapshot`.
+5. Existing command-result/error handling.
 
-The recognized source-backed registry now includes both:
+SIP enforcement was not weakened. If recovery is the root-state action but SIP prevents execution, Revert remains visible. Clicking it reports the concrete SIP prerequisite and stops before mount or rollback. A mount or `bless` failure likewise fails the operation; authorization does not imply silent or automatic recovery.
 
-- `OCLP-Mod.plist` → required identity key `OCLP-Mod`;
-- `oclp-mod.plist` → required identity key `OCLP-Mod`.
+`REVERT_PENDING` remains protected from a second destructive revert. It communicates that the existing revert completed and a reboot is required.
 
-Existing `OCLP-Plus.plist`/`OCLP-Plus` and `OCLP-R.plist`/`OCLP-R` recognition is preserved.
+## Future partial-operation protection
 
-Foreign metadata is no longer accepted by filename alone. The plist must be a dictionary and contain the expected nonempty family identity. Multiple family files, malformed plists, missing identity keys, and ambiguous capitalization remain invalid. Canonical legacy metadata must contain a valid `OpenCore Legacy Patcher` identity unless it declares the current KGP schema.
+The existing integrity-checked, root-owned, boot-session-bound lifecycle store now also represents:
 
-Recognized foreign metadata plus active patched-root evidence authorizes recovery only. It never authorizes patching and is never classified as current KGP metadata.
+- `PATCH_IN_PROGRESS`;
+- `PATCH_FAILED_RECOVERY_REQUIRED`.
 
-## Global Darwin 26 KDK policy
+Immediately before crossing the first root-patch mutation boundary, the patcher records `PATCH_IN_PROGRESS`. A successful operation replaces it with the existing `PATCH_PENDING_REBOOT` record and truthful installed-operation metadata. An exception or unsuccessful result after that boundary records `PATCH_FAILED_RECOVERY_REQUIRED`, unmounts through the existing cleanup path, and does not claim a successful installation.
 
-One central build policy in `support/kdk_selection.py` parses the leading Darwin major from the Apple KDK build identifier. Darwin major `26` is prohibited for root patching. A missing or unparsable build identity also fails closed at acceptance/use boundaries.
+These records survive application quit/reopen on the same boot and become stale after a boot-session change as designed. They improve state presentation and provenance for AUTO-KDK, MANUAL-KDK, and no-KDK operations equally. They are not required to authorize the common Revert action.
 
-The policy is applied at every relevant path:
-
-1. **Trusted catalog exposure:** prohibited candidates are omitted from `available_candidates()`, so they cannot appear as eligible manual rows.
-2. **Automatic exact/closest resolution:** the existing resolver applies its unchanged exact/closest algorithm only to permitted catalog entries.
-3. **Manual exact resolution:** a selected candidate must pass Tahoe eligibility, the central build policy, and exact trusted-catalog identity matching; no substitution is introduced.
-4. **Resolved-candidate exposure:** a prohibited resolved build cannot be returned to UI or operation callers.
-5. **Local installed lookup:** exact, version-based fallback, dialog status, and backup restoration paths reject Darwin 26 builds. Installed KDK validation reads `ProductBuildVersion` and refuses Darwin 26 without deleting it as corrupt.
-6. **Download resolution:** `retrieve_download()` rechecks the selected build before either installed reuse or creating a download object. A Darwin 26 URL is never returned for download.
-7. **Predownload installation:** the root merge path reads `KDKInfo.plist`, requires an established build identity, and rejects Darwin 26 before installing the DMG.
-8. **Operation-time/manual revalidation:** existing GUI and patch-operation resolver construction now consumes the guarded resolver, so a stale or programmatic Darwin 26 manual candidate fails before support-package/root-patch work.
-9. **Merge-time final validation:** the merge path checks the resolver build repeatedly and reads the actual installed KDK `SystemVersion.plist` before any KDK merge. A Darwin 26 installed identity cannot be merged or used.
-
-If a prohibited catalog entry precedes a valid supported candidate, the existing closest-match resolver continues over the filtered candidate set and uses the valid candidate. No new cross-major fallback algorithm was invented. If no permitted candidate satisfies existing policy, resolution fails rather than using Darwin 26.
-
-Darwin 24 and Darwin 25 candidate behavior remains valid in regression fixtures. AUTO mode retains the prior exact/closest semantics for permitted candidates. KDK download/install UI, KDK merge commands, kernel-cache rebuild commands, and manual no-substitution semantics are unchanged.
-
-## Phase 3B and wireless preservation
-
-The full Phase 3B/3C selection suites remain green:
+## Preserved Phase 3B/3C behavior
 
 - BOTH, Wi-Fi-only, Audio-only, and neither retain their established selection behavior.
-- Wi-Fi-only remains no-KDK when no other selected patch requires a KDK.
-- Audio OFF still excludes Modern Audio/Beta-1 AppleHDA and its sole KDK requirement.
-- other selected KDK-requiring patches still require a permitted KDK.
-- empty selection still blocks before KDK/root operations.
-- state, click-time, pre-KDK, and operation-time revalidation remains active.
-- installed metadata still records only patches actually applied.
+- Wi-Fi-only remains no-KDK when no other selected patch requires one.
+- Audio OFF excludes Modern Audio/Beta-1 AppleHDA and the KDK requirement caused solely by Modern Audio.
+- Other selected KDK-requiring patches still require a permitted KDK.
+- Empty explicit selection still aborts before KDK/root operations.
+- Installed selection metadata still records only patches actually applied.
+- AUTO exact/closest ranking among permitted KDK candidates is unchanged.
+- Manual KDK selection remains exact, operation-scoped, and fail-closed without substitution.
+- KDK download/install GUI, merge contents, KC commands, snapshot creation, and common rollback command are unchanged.
+- Existing recognition of both `OCLP-Mod.plist` and lowercase `oclp-mod.plist` remains intact; metadata spelling no longer controls Revert authorization.
 
-`modern_wireless.py`, `modern_audio.py`, and `device_probe.py` are byte-identical to baseline commit `4fe8f132...`. No Modern Wireless/Audio dictionary, payload, PCI ID, spoof, or hardware-detection code changed.
+Modern Wireless detection and selection remain hardware-agnostic at the selection layer. Supported Broadcom fixtures and the existing supported Intel Modern Wireless fixture pass. No PCI identifiers, spoofing, EFI, DeviceProperties, ACPI, DMAR, AppleVTD, or hardware behavior changed.
 
-The supported Broadcom detector path is covered directly. KGP's present Intel workflow remains the previously documented external Broadcom-identity/applicability path; no direct Intel PCI detection was added. A hardware-agnostic applicability fixture confirms the selection layer continues to consume Modern Wireless applicability without inspecting Broadcom/Intel IDs, so the existing external Intel path is not coupled to the new KDK policy.
+## Validation
 
-## Validation results
+The exact clean implementation source was tested twice: once in the primary tree and once in the isolated build-source clone.
 
-- New recovery/KDK/wireless tests: **24 passed, 0 failed**.
-- Complete repository unit-test discovery: **166 passed, 0 failed**.
-- `python3 -m compileall -q opencore_legacy_patcher tests`: passed.
+- Focused recovery/KDK suite: **67 passed, 0 failed**.
+- Complete repository suite: **178 passed, 0 failed**.
+- Exact build-source clone complete suite: **178 passed, 0 failed**.
+- `python -m compileall`: passed.
 - `git diff --check`: passed.
-- Frozen-source differential for Modern Wireless, Modern Audio, device probing, EFI builder, and datasets: no differences from `4fe8f132...`.
+- One inherited non-failing `ResourceWarning` remains in `efi_builder/support.py:130`.
 
-The full suite emitted one pre-existing `ResourceWarning` for an unclosed config plist in `efi_builder/support.py:130`; it did not fail a test and is unrelated to this change. Error/warning log lines from negative-path fixtures are expected assertions of fail-closed behavior.
+Locked build environment:
 
-## Known limitations
+- CPython `3.14.3` x86_64;
+- exactly 22 locked distributions;
+- dependency lock SHA-256 `be3082246b9d559c766dbda3eac4bb5bc1766bd85cc76756953d06b042d152a0`;
+- Python framework SHA-256 `131f5211d7a7ec6279abcc2e4b0b97f8559d8eb77d5a28c22771f9ced084360f`.
 
-- A pre-lifecycle, pre-first-reboot patch prepared by an older build cannot be inferred safely from a still-clean active root. This remains fail-closed; no unrelated APFS snapshot scan or guessing was added.
-- Malformed, duplicate, ambiguous, or unknown metadata does not receive broad recovery authorization. A valid pending lifecycle is independent positive evidence; otherwise active patched-root evidence must be paired with structurally recognized OCLP-family metadata.
-- Recovery authorization does not guarantee execution: SIP, root-volume mount, or `bless --last-sealed-snapshot` can still fail. These existing execution prerequisites remain enforced and are now surfaced without hiding the recovery path.
-- No new Darwin-generation fallback policy was added. The existing resolver selects among permitted candidates; it fails if none meets its established compatibility rules.
+Frozen parity:
 
-## Integrity statement
+- payload aggregate: `13dc609fe5029df046c85c54693b48816f713a0c61220a955a3eb6677976a9a1`;
+- Modern Wireless dictionary/source: `fa0dad681239c2268d17d81a9d8f422dc359d5d2b8b9fe670f2f12d4f3485f97`;
+- Modern Audio dictionary/source: `a24581ef94b304d2252bc9db9d181a20332fe6621801dadf9bd5cb3339d2615d`;
+- `payloads.dmg`: `22581d0a9981f583d1921ca447bb0d578b3c39b20a805c5c6bac4ab5678d6f98`;
+- `Universal-Binaries.dmg`: `3659ae0ebadc1062252bbeeb7fe75dce292b5b9d599681c6dfa3dc4430bbc6a4`.
 
-No changes were made to:
+Both the built app and package-expanded app pass `codesign --verify --strict --deep`. Their trees are byte/mode/symlink identical, excluding directory timestamps.
 
-- Modern Wireless or Modern Audio detection/dictionaries/payloads;
-- Intel PCI support or Broadcom spoofing;
-- EFI, DeviceProperties, ACPI, DMAR, AppleVTD, or hardware state;
-- KDK merge commands or kernel-cache rebuild commands;
-- SIP requirements;
-- APFS snapshot creation or `bless` rollback implementation;
-- component versions or payload identities.
+Final artifacts:
 
-Production remained at `ec5e591e0f46e948b0258ef1c8ed5d17d6a2c865`, clean, with its original `origin` remote. The development repository remains remote-free. No package was built or installed, no root patch or revert was performed, and no network dependency resolution was used.
+- `OpenCore-Patcher.pkg`: `66fb1ef601ad5df57a4cf4cb3906f2c72ef82134cac1d6bd238bcd59f34ec074`
+- `OpenCore-Patcher-Uninstaller.pkg`: `f3b00eb527b99613e94190d4ed38ea33146ba4df23b73d69f8215d0d7ac1ee00`
+- `AutoPkg-Assets.pkg`: `5ec814b2f5902c04026cbff71e7a3b0428996fd74a474326ddbcb9abfc0d8dc5`
 
-After the documentation-only checkpoint containing the two reports, the development working tree is clean. The documentation commit changes history only; the implementation source remains exactly `53c44be749e77d830b4ee5ba733321f40d31ec02`.
+Delivery directory:
+
+`/Users/kgp/Desktop/OCLP/OCLP-v2.0-phase3C-recovery-hotfix`
+
+The package embeds implementation HEAD `62e0b1c0413eb900bda69955030dd5bee28219b6`, its canonical commit URL, and exact commit date. It is a runtime-test artifact and has not been installed or executed by Codex.
+
+## Integrity and limitations
+
+No live-system operation was performed: no package installation, root patch, root revert, reboot, `bless`, KDK installation/removal, writable System mount, sudo mutation, EFI/NVRAM write, or hardware change. No dependency network resolution occurred.
+
+The common Revert action is deliberately available for blocked/unknown non-clean states without metadata ownership proof, but it remains an explicit user action and may still fail safely at SIP, root mount, or `bless --last-sealed-snapshot`. The patcher does not attempt another new patch in those states.
+
+Production, the Phase-2-only diagnostic repository, and the local upstream/Plus/Mod audit copies were not modified. This report is committed after the artifact build as a documentation-only checkpoint; it does not change the embedded implementation identity and does not require a rebuild.
