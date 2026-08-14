@@ -18,7 +18,10 @@ def kdk_darwin_major(build: object) -> int | None:
     """Return the Darwin major encoded by an Apple build identifier."""
     if not isinstance(build, str):
         return None
-    match = re.match(r"^(\d+)", build.strip())
+    # ProductBuildVersion is an Apple build identifier such as 25G82.  A
+    # marketing ProductVersion such as 26.6.2 is not a build identity and must
+    # never be interpreted as Darwin 26 by this policy helper.
+    match = re.match(r"^(\d+)[A-Za-z][A-Za-z0-9]*$", build.strip())
     if match is None:
         return None
     return int(match.group(1))

@@ -21,7 +21,7 @@ from opencore_legacy_patcher.sys_patch.utilities import kdk_merge
 
 DARWIN_25 = {"version": "26.6.2", "build": "25G82", "url": "https://example/25G82.dmg", "fileSize": 82}
 DARWIN_24 = {"version": "15.6", "build": "24G90", "url": "https://example/24G90.dmg", "fileSize": 90}
-DARWIN_26 = {"version": "27.0", "build": "26A101", "url": "https://example/26A101.dmg", "fileSize": 101}
+DARWIN_26 = {"version": "27.0", "build": "26A5368g", "url": "https://example/26A5368g.dmg", "fileSize": 101}
 MISMATCHED_DARWIN_26 = {"version": "26.6.3", "build": "26Z99", "url": "https://example/26Z99.dmg", "fileSize": 99}
 
 
@@ -42,10 +42,18 @@ class Darwin26KDKResolverPolicyTests(unittest.TestCase):
             return kdk_handler.KernelDebugKitObject(constants(), build, version, selected_candidate=selected)
 
     def test_build_policy_blocks_only_darwin_26(self) -> None:
-        self.assertEqual(kdk_darwin_major("26A101"), 26)
-        self.assertFalse(root_patch_kdk_build_allowed("26A101"))
+        self.assertEqual(kdk_darwin_major("26A5368g"), 26)
+        self.assertFalse(root_patch_kdk_build_allowed("26A5368g"))
+        self.assertFalse(root_patch_kdk_build_allowed("26A5406e"))
         self.assertTrue(root_patch_kdk_build_allowed("25G82"))
+        self.assertTrue(root_patch_kdk_build_allowed("25G76"))
         self.assertTrue(root_patch_kdk_build_allowed("24G90"))
+
+    def test_marketing_product_version_is_not_a_build_family(self) -> None:
+        self.assertIsNone(kdk_darwin_major("26.6.2"))
+        self.assertFalse(root_patch_kdk_build_allowed("26.6.2"))
+        with self.assertRaisesRegex(Exception, "ProductBuildVersion could not be established"):
+            kdk_merge.KernelDebugKitMerge._require_permitted_build("26.6.2")
 
     def test_automatic_and_available_catalog_selection_reject_darwin_26(self) -> None:
         resolver = self._resolver([DARWIN_26], build="26A101", version="27.0")
@@ -57,6 +65,13 @@ class Darwin26KDKResolverPolicyTests(unittest.TestCase):
     def test_closest_match_skips_darwin_26_and_uses_permitted_fallback(self) -> None:
         resolver = self._resolver([MISMATCHED_DARWIN_26, DARWIN_25])
         self.assertTrue(resolver.success)
+        self.assertEqual(resolver.kdk_url_build, "25G82")
+        self.assertEqual(resolver.resolved_candidate(), KernelDebugKitCandidate.from_catalog_entry(DARWIN_25))
+
+    def test_auto_26_6_2_selects_permitted_exact_25g82(self) -> None:
+        resolver = self._resolver([DARWIN_26, DARWIN_25], build="25G82", version="26.6.2")
+        self.assertTrue(resolver.success)
+        self.assertTrue(resolver.kdk_url_is_exactly_match)
         self.assertEqual(resolver.kdk_url_build, "25G82")
         self.assertEqual(resolver.resolved_candidate(), KernelDebugKitCandidate.from_catalog_entry(DARWIN_25))
 
@@ -89,18 +104,18 @@ class Darwin26KDKResolverPolicyTests(unittest.TestCase):
     def test_locally_installed_darwin_26_kdk_is_not_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            kdk_path = root / "KDK_27.0_26A101.kdk"
+            kdk_path = root / "KDK_27.0_26A5368g.kdk"
             plist_path = kdk_path / "System/Library/CoreServices/SystemVersion.plist"
             plist_path.parent.mkdir(parents=True)
             with plist_path.open("wb") as plist_file:
-                plistlib.dump({"ProductVersion": "27.0", "ProductBuildVersion": "26A101"}, plist_file)
+                plistlib.dump({"ProductVersion": "27.0", "ProductBuildVersion": "26A5368g"}, plist_file)
             resolver = kdk_handler.KernelDebugKitObject.__new__(kdk_handler.KernelDebugKitObject)
             resolver.ignore_installed = False
             resolver.check_backups_only = False
             resolver.passive = True
             with mock.patch.object(kdk_handler, "KDK_INSTALL_PATH", str(root)):
-                self.assertIsNone(resolver._local_kdk_installed(match="26A101"))
-                self.assertIsNone(resolver.installed_path_for_build("26A101"))
+                self.assertIsNone(resolver._local_kdk_installed(match="26A5368g"))
+                self.assertIsNone(resolver.installed_path_for_build("26A5368g"))
 
     def test_operation_time_manual_revalidation_rejects_before_support_mount(self) -> None:
         patcher = sys_patch.PatchSysVolume.__new__(sys_patch.PatchSysVolume)
@@ -125,6 +140,27 @@ class Darwin26KDKResolverPolicyTests(unittest.TestCase):
 
 
 class Darwin26KDKMergePolicyTests(unittest.TestCase):
+    def test_installed_25g82_with_empty_catalog_build_is_accepted(self) -> None:
+        """Regression: installed AUTO resolution leaves kdk_url_build empty."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            installed = root / "KDK_26.6.2_25G82.kdk"
+            version_plist = installed / "System/Library/CoreServices/SystemVersion.plist"
+            version_plist.parent.mkdir(parents=True)
+            with version_plist.open("wb") as plist_file:
+                plistlib.dump({"ProductVersion": "26.6.2", "ProductBuildVersion": "25G82"}, plist_file)
+
+            merger = kdk_merge.KernelDebugKitMerge(constants(root / "missing.dmg"), "/mount", False)
+            resolver = mock.Mock(
+                success=True,
+                kdk_already_installed=True,
+                kdk_installed_path=str(installed),
+                kdk_url_build="",
+            )
+            merger._kdk_object = mock.Mock(return_value=resolver)
+            merger._matching_kdk_already_merged = mock.Mock(return_value=True)
+            self.assertEqual(merger.merge(), installed)
+
     def test_permitted_predownload_retains_existing_install_and_merge_path(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -157,7 +193,7 @@ class Darwin26KDKMergePolicyTests(unittest.TestCase):
             download = Path(temporary) / "KDK.dmg"
             download.touch()
             with (download.parent / kdk_handler.KDK_INFO_PLIST).open("wb") as info_file:
-                plistlib.dump({"build": "26A101", "version": "27.0"}, info_file)
+                plistlib.dump({"build": "26A5406e", "version": "27.0"}, info_file)
             merger = kdk_merge.KernelDebugKitMerge(constants(download), "/mount", False)
             with mock.patch.object(kdk_handler.KernelDebugKitUtilities, "install_kdk_dmg") as install:
                 with self.assertRaisesRegex(Exception, "Darwin 26"):
@@ -166,11 +202,11 @@ class Darwin26KDKMergePolicyTests(unittest.TestCase):
 
     def test_installed_kdk_identity_is_revalidated_before_merge(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            kdk_path = Path(temporary) / "KDK_27.0_26A101.kdk"
+            kdk_path = Path(temporary) / "KDK_27.0_26A5368g.kdk"
             plist_path = kdk_path / "System/Library/CoreServices/SystemVersion.plist"
             plist_path.parent.mkdir(parents=True)
             with plist_path.open("wb") as plist_file:
-                plistlib.dump({"ProductVersion": "27.0", "ProductBuildVersion": "26A101"}, plist_file)
+                plistlib.dump({"ProductVersion": "27.0", "ProductBuildVersion": "26A5368g"}, plist_file)
             merger = kdk_merge.KernelDebugKitMerge(constants(), "/mount", False)
             resolver = mock.Mock(
                 success=True,

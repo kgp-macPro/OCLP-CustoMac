@@ -12,6 +12,7 @@ from ...support import subprocess_wrapper, kdk_handler
 from ...support.kdk_selection import (
     KernelDebugKitCandidate,
     KernelDebugKitIdentity,
+    kdk_darwin_major,
     root_patch_kdk_build_allowed,
 )
 from ...volume import generate_copy_arguments
@@ -72,7 +73,27 @@ class KernelDebugKitMerge:
     def _require_permitted_build(build: object) -> None:
         if root_patch_kdk_build_allowed(build):
             return
+        if kdk_darwin_major(build) is None:
+            raise Exception("Kernel Debug Kit ProductBuildVersion could not be established")
         raise Exception("Darwin 26 Kernel Debug Kits are prohibited for root patching")
+
+
+    def _require_permitted_kdk(self, kdk_obj: kdk_handler.KernelDebugKitObject) -> None:
+        """Validate the authoritative build identity for a resolved KDK.
+
+        Installed-KDK resolution intentionally returns before populating the
+        remote-catalog URL fields.  In that case, ProductBuildVersion from the
+        installed bundle is authoritative; an empty catalog build must never
+        be mistaken for a prohibited Darwin build family.
+        """
+        if kdk_obj.kdk_already_installed is True:
+            kdk_path = Path(kdk_obj.kdk_installed_path) if kdk_obj.kdk_installed_path else None
+            identity = KernelDebugKitIdentity.from_installed_path(kdk_path) if kdk_path else None
+            if identity is None:
+                raise Exception("Installed KDK ProductBuildVersion could not be established")
+            self._require_permitted_build(identity.build)
+            return
+        self._require_permitted_build(kdk_obj.kdk_url_build)
 
 
     def _matching_kdk_already_merged(self, kdk_path: str) -> bool:
@@ -163,7 +184,7 @@ class KernelDebugKitMerge:
         if kdk_obj is not None and kdk_obj.success is False:
             raise Exception(f"Unable to get selected KDK info: {kdk_obj.error_msg}")
         if kdk_obj is not None:
-            self._require_permitted_build(kdk_obj.kdk_url_build)
+            self._require_permitted_kdk(kdk_obj)
 
         # If a KDK was pre-downloaded, install it. An already-installed manual
         # selection deliberately ignores unrelated stale download artifacts.
@@ -186,7 +207,7 @@ class KernelDebugKitMerge:
         if kdk_obj.success is False:
             logging.info(f"Unable to get KDK info: {kdk_obj.error_msg}")
             raise Exception(f"Unable to get KDK info: {kdk_obj.error_msg}")
-        self._require_permitted_build(kdk_obj.kdk_url_build)
+        self._require_permitted_kdk(kdk_obj)
 
         # If no KDK is installed, download and install it
         if kdk_obj.kdk_already_installed is False:
@@ -218,7 +239,7 @@ class KernelDebugKitMerge:
             if kdk_obj.success is False:
                 logging.info(f"Unable to get KDK info: {kdk_obj.error_msg}")
                 raise Exception(f"Unable to get KDK info: {kdk_obj.error_msg}")
-            self._require_permitted_build(kdk_obj.kdk_url_build)
+            self._require_permitted_kdk(kdk_obj)
 
             if kdk_obj.kdk_already_installed is False:
                 # We shouldn't get here, but just in case

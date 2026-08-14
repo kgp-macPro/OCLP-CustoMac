@@ -22,7 +22,7 @@ from . import (
     network_handler,
     subprocess_wrapper
 )
-from .kdk_selection import KernelDebugKitCandidate, root_patch_kdk_build_allowed
+from .kdk_selection import KernelDebugKitCandidate, kdk_darwin_major, root_patch_kdk_build_allowed
 
 KDK_INSTALL_PATH: str  = "/Library/Developer/KDKs"
 KDK_INFO_PLIST:   str  = "KDKInfo.plist"
@@ -142,16 +142,34 @@ class KernelDebugKitObject:
         if catalog is None:
             return ()
         candidates = []
-        for entry in catalog:
+        for entry in self._permitted_catalog_entries(catalog):
             try:
                 candidate = KernelDebugKitCandidate.from_catalog_entry(entry)
             except (KeyError, TypeError, ValueError):
                 continue
-            if candidate.allowed_for_root_patching() is False:
-                logging.warning(f"Ignoring prohibited Darwin 26 KDK catalog candidate: {candidate.build}")
-                continue
             candidates.append(candidate)
         return tuple(candidates)
+
+
+    @staticmethod
+    def _permitted_catalog_entries(catalog: list) -> list[dict]:
+        """Filter trusted catalog entries once before resolver ranking."""
+        permitted = []
+        for entry in catalog:
+            if not isinstance(entry, dict):
+                logging.warning("Ignoring KDK catalog entry without a valid build identity")
+                continue
+            build = entry.get("build")
+            if root_patch_kdk_build_allowed(build) is False:
+                version = entry.get("version")
+                identity = f"{build} ({version})" if build and version else str(build or "unknown")
+                if kdk_darwin_major(build) == 26:
+                    logging.warning(f"Ignoring prohibited Darwin 26 KDK: {identity}")
+                else:
+                    logging.warning(f"Ignoring KDK catalog entry without a valid ProductBuildVersion: {identity}")
+                continue
+            permitted.append(entry)
+        return permitted
 
 
     def resolved_candidate(self) -> KernelDebugKitCandidate | None:
@@ -279,13 +297,9 @@ class KernelDebugKitObject:
 
             return
 
-        permitted_remote_kdks = []
-        for kdk in remote_kdk_version:
-            if not isinstance(kdk, dict) or root_patch_kdk_build_allowed(kdk.get("build")) is False:
-                logging.warning(f"Ignoring ineligible KDK catalog entry: {kdk!r}")
-                continue
-            permitted_remote_kdks.append(kdk)
-        remote_kdk_version = permitted_remote_kdks
+        # Apply the single root-patching eligibility policy before inherited
+        # exact/closest ranking; ranking semantics below remain unchanged.
+        remote_kdk_version = self._permitted_catalog_entries(remote_kdk_version)
 
         # First check exact match
         for kdk in remote_kdk_version:
