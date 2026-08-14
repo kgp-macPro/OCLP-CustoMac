@@ -141,11 +141,11 @@ class RootPatchStateProtectionTests(unittest.TestCase):
         self.assertEqual(result.state, RootPatchState.INVALID_UNKNOWN)
         self.assertFalse(result.patch_allowed)
 
-    def test_missing_metadata_with_broken_root_fails_closed_without_revert_guess(self) -> None:
+    def test_missing_metadata_with_broken_root_blocks_patch_but_allows_common_revert(self) -> None:
         result = self._evaluator(RootStateEvidence(True, "Broken")).evaluate(PATCHES)
         self.assertEqual(result.state, RootPatchState.INVALID_UNKNOWN)
         self.assertFalse(result.patch_allowed)
-        self.assertFalse(result.revert_applicable)
+        self.assertTrue(result.revert_applicable)
 
     def test_clean_root_without_metadata_is_patchable(self) -> None:
         result = self._evaluator(RootStateEvidence(True, "Yes")).evaluate(PATCHES)

@@ -60,8 +60,6 @@ class MetadataDiscovery(StrEnum):
 class RootStateEvidence:
     apfs_snapshot: bool
     seal: str
-    safe_rollback_available: bool = False
-    root_device_identifier: str | None = None
 
     @property
     def clean(self) -> bool:
@@ -70,12 +68,6 @@ class RootStateEvidence:
     @property
     def patched(self) -> bool:
         return self.apfs_snapshot and self.seal.lower() in {"broken", "no", "unsealed", "false"}
-
-    @property
-    def recovery_required(self) -> bool:
-        """Whether the active root is positively known not to be clean/sealed."""
-        return self.seal.lower() in {"broken", "no", "unsealed", "false"}
-
 
 @dataclass(frozen=True)
 class RootPatchStateResult:
@@ -159,59 +151,12 @@ def read_root_state_evidence() -> RootStateEvidence | None:
         content = plistlib.loads(root_result.stdout)
         if "Sealed" not in content:
             return None
-        evidence = RootStateEvidence(
+        return RootStateEvidence(
             apfs_snapshot=content.get("APFSSnapshot") is True,
             seal=str(content["Sealed"]),
-            root_device_identifier=(
-                content.get("DeviceIdentifier")
-                if isinstance(content.get("DeviceIdentifier"), str) and content.get("DeviceIdentifier")
-                else None
-            ),
         )
     except (plistlib.InvalidFileException, TypeError, ValueError):
         return None
-
-    if evidence.recovery_required is False or evidence.root_device_identifier is None:
-        return evidence
-
-    # Query only the active root's own APFS volume/snapshot device.  A sealed
-    # snapshot UUID on this exact volume is positive rollback evidence; names
-    # and snapshots from unrelated APFS volumes are deliberately ignored.
-    snapshot_result = subprocess.run(
-        [
-            "/usr/sbin/diskutil",
-            "apfs",
-            "listSnapshots",
-            "-plist",
-            evidence.root_device_identifier,
-        ],
-        capture_output=True,
-    )
-    if snapshot_result.returncode != 0:
-        return evidence
-    try:
-        snapshot_content = plistlib.loads(snapshot_result.stdout)
-        snapshots = snapshot_content.get("Snapshots")
-        if not isinstance(snapshots, list):
-            return evidence
-        safe_rollback_available = any(
-            isinstance(snapshot, dict)
-            and isinstance(snapshot.get("SnapshotUUID"), str)
-            and bool(snapshot["SnapshotUUID"])
-            and (
-                snapshot.get("Sealed") is True
-                or str(snapshot.get("Sealed", "")).lower() in {"yes", "sealed", "true"}
-            )
-            for snapshot in snapshots
-        )
-    except (plistlib.InvalidFileException, AttributeError, TypeError, ValueError):
-        return evidence
-    return RootStateEvidence(
-        apfs_snapshot=evidence.apfs_snapshot,
-        seal=evidence.seal,
-        safe_rollback_available=safe_rollback_available,
-        root_device_identifier=evidence.root_device_identifier,
-    )
 
 
 class RootPatchStateEvaluator:
@@ -335,7 +280,6 @@ class RootPatchStateEvaluator:
         state: RootPatchState,
         reason: str,
         *,
-        revert_applicable: bool = False,
         installed_selection: tuple[str, ...] | None = None,
         installed_kdk_selection_mode: KDKSelectionMode | None = None,
         installed_kdk_identity: KernelDebugKitIdentity | None = None,
@@ -343,7 +287,10 @@ class RootPatchStateEvaluator:
         return RootPatchStateResult(
             state=state,
             patch_allowed=state == RootPatchState.CLEAN,
-            revert_applicable=revert_applicable,
+            # Recovery authorization follows root state, never patch/KDK/build
+            # ownership.  REVERT_PENDING has already completed the destructive
+            # operation and only permits reboot, so a second revert is blocked.
+            revert_applicable=state not in {RootPatchState.CLEAN, RootPatchState.REVERT_PENDING},
             reason=reason,
             installed_selection=installed_selection,
             installed_kdk_selection_mode=installed_kdk_selection_mode,
@@ -410,7 +357,6 @@ class RootPatchStateEvaluator:
             return self._result(
                 RootPatchState.PATCH_IN_PROGRESS,
                 "Root patching crossed the root-mutation boundary and did not complete; revert to the last sealed snapshot before patching again",
-                revert_applicable=True,
                 installed_selection=installed_selection,
                 installed_kdk_selection_mode=kdk_mode,
                 installed_kdk_identity=kdk_identity,
@@ -419,7 +365,6 @@ class RootPatchStateEvaluator:
             return self._result(
                 RootPatchState.PATCH_FAILED_RECOVERY_REQUIRED,
                 "Root patching failed after root mutation began; revert to the last sealed snapshot before patching again",
-                revert_applicable=True,
                 installed_selection=installed_selection,
                 installed_kdk_selection_mode=kdk_mode,
                 installed_kdk_identity=kdk_identity,
@@ -428,12 +373,10 @@ class RootPatchStateEvaluator:
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 "A completed root-patch lifecycle is pending reboot, but its installed operation metadata is not trustworthy",
-                revert_applicable=True,
             )
         return self._result(
             RootPatchState.PATCH_PENDING_REBOOT,
             "Root patching completed successfully; reboot to use the new patched snapshot, or revert before rebooting",
-            revert_applicable=True,
             installed_selection=installed_selection,
             installed_kdk_selection_mode=kdk_mode,
             installed_kdk_identity=kdk_identity,
@@ -462,7 +405,6 @@ class RootPatchStateEvaluator:
                 return self._result(
                     RootPatchState.PATCH_PENDING_REBOOT,
                     "Root patching completed successfully; reboot to use the new patched snapshot, or revert before rebooting",
-                    revert_applicable=True,
                 )
             return self._pending_lifecycle_result(
                 RootPatchLifecycleState.PATCH_PENDING_REBOOT,
@@ -471,17 +413,9 @@ class RootPatchStateEvaluator:
 
         lifecycle = self.lifecycle_store.read()
         if lifecycle.discovery == LifecycleDiscovery.INVALID:
-            safe_known_revert = bool(
-                evidence
-                and (
-                    (evidence.patched and metadata.recovery_evidence_present)
-                    or (evidence.recovery_required and evidence.safe_rollback_available)
-                )
-            )
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 lifecycle.reason,
-                revert_applicable=safe_known_revert,
             )
         if lifecycle.discovery == LifecycleDiscovery.VALID:
             return self._pending_lifecycle_result(
@@ -492,21 +426,15 @@ class RootPatchStateEvaluator:
         if evidence is None:
             return self._result(RootPatchState.INVALID_UNKNOWN, "Root snapshot and seal state could not be read")
 
-        metadata_revert = evidence.patched and metadata.recovery_evidence_present
-        independent_same_root_revert = evidence.recovery_required and evidence.safe_rollback_available
-        safe_known_revert = metadata_revert or independent_same_root_revert
-
         if metadata.discovery == MetadataDiscovery.INVALID:
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 metadata.reason,
-                revert_applicable=safe_known_revert,
             )
         if metadata.discovery == MetadataDiscovery.LEGACY_FOREIGN:
             return self._result(
                 RootPatchState.LEGACY_FOREIGN,
                 f"{metadata.reason}; revert existing patches, reboot, then patch with this build",
-                revert_applicable=safe_known_revert,
             )
         if metadata.discovery == MetadataDiscovery.MISSING:
             if evidence.clean:
@@ -514,7 +442,6 @@ class RootPatchStateEvaluator:
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 "No trusted patch metadata exists, but the active root is not a clean sealed snapshot",
-                revert_applicable=independent_same_root_revert,
             )
 
         installed = metadata.data
@@ -522,14 +449,12 @@ class RootPatchStateEvaluator:
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 "Installed patch metadata contradicts the active root snapshot/seal state",
-                revert_applicable=False,
             )
 
         if installed.get("Metadata Schema") != ROOT_PATCH_METADATA_SCHEMA:
             return self._result(
                 RootPatchState.LEGACY_FOREIGN,
                 "Installed metadata predates or does not implement the KGP v2.0 exact-build schema; revert, reboot, then repatch",
-                revert_applicable=True,
             )
 
         identity = current_build_identity(self.constants)
@@ -537,7 +462,6 @@ class RootPatchStateEvaluator:
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 "The running application has no trustworthy exact build identity",
-                revert_applicable=True,
             )
 
         installed_selection = installed.get("Installed Patches")
@@ -545,13 +469,11 @@ class RootPatchStateEvaluator:
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 "Installed metadata has no structurally valid patch selection",
-                revert_applicable=True,
             )
         if len(installed_selection) != len(set(installed_selection)):
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 "Installed metadata contains duplicate patch identifiers",
-                revert_applicable=True,
             )
 
         required_identity_keys = set(identity)
@@ -559,26 +481,22 @@ class RootPatchStateEvaluator:
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 "Installed exact-build metadata is incomplete",
-                revert_applicable=True,
             )
         if installed["Project Identity"] != identity["Project Identity"] or installed["Repository"] != identity["Repository"]:
             return self._result(
                 RootPatchState.LEGACY_FOREIGN,
                 "Installed metadata belongs to a different project or repository; revert, reboot, then patch with KGP v2.0",
-                revert_applicable=True,
             )
         installed_sha = installed["Commit SHA"]
         if not FULL_SHA_PATTERN.fullmatch(installed_sha):
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 "Installed metadata does not contain a full 40-character commit SHA",
-                revert_applicable=True,
             )
         if installed["Commit URL"] != f"{installed['Repository'].rstrip('/')}/commit/{installed_sha}":
             return self._result(
                 RootPatchState.INVALID_UNKNOWN,
                 "Installed commit URL and SHA are contradictory",
-                revert_applicable=True,
             )
 
         installed_kdk_mode, installed_kdk_identity = installed_kdk_provenance(installed)
@@ -587,7 +505,6 @@ class RootPatchStateEvaluator:
             return self._result(
                 RootPatchState.INSTALLED_DIFFERENT_BUILD,
                 "Installed root patches were produced by a different exact build; revert, reboot, then repatch",
-                revert_applicable=True,
                 installed_selection=tuple(sorted(installed_selection)),
                 installed_kdk_selection_mode=installed_kdk_mode,
                 installed_kdk_identity=installed_kdk_identity,
@@ -598,7 +515,6 @@ class RootPatchStateEvaluator:
             return self._result(
                 RootPatchState.INSTALLED_DIFFERENT_PATCH_SET,
                 "Installed and requested patch selections differ; revert, reboot, then apply the requested selection",
-                revert_applicable=True,
                 installed_selection=tuple(sorted(installed_selection)),
                 installed_kdk_selection_mode=installed_kdk_mode,
                 installed_kdk_identity=installed_kdk_identity,
@@ -607,7 +523,6 @@ class RootPatchStateEvaluator:
         return self._result(
             RootPatchState.INSTALLED_SAME,
             "The requested root patches from this exact build are already installed",
-            revert_applicable=True,
             installed_selection=tuple(sorted(installed_selection)),
             installed_kdk_selection_mode=installed_kdk_mode,
             installed_kdk_identity=installed_kdk_identity,
