@@ -9,7 +9,11 @@ from ... import constants
 
 from ...datasets import os_data
 from ...support import subprocess_wrapper, kdk_handler
-from ...support.kdk_selection import KernelDebugKitCandidate
+from ...support.kdk_selection import (
+    KernelDebugKitCandidate,
+    KernelDebugKitIdentity,
+    root_patch_kdk_build_allowed,
+)
 from ...volume import generate_copy_arguments
 from ..root_state import ROOT_PATCH_METADATA_PATH
 
@@ -51,6 +55,24 @@ class KernelDebugKitMerge:
             info.get("build") == self.manual_kdk_candidate.build
             and info.get("version") == self.manual_kdk_candidate.version
         )
+
+
+    def _predownload_kdk_build(self) -> str | None:
+        info_path = self.constants.kdk_download_path.parent / kdk_handler.KDK_INFO_PLIST
+        try:
+            with info_path.open("rb") as info_file:
+                info = plistlib.load(info_file)
+        except (FileNotFoundError, OSError, plistlib.InvalidFileException, TypeError, ValueError):
+            return None
+        build = info.get("build") if isinstance(info, dict) else None
+        return build if isinstance(build, str) and build else None
+
+
+    @staticmethod
+    def _require_permitted_build(build: object) -> None:
+        if root_patch_kdk_build_allowed(build):
+            return
+        raise Exception("Darwin 26 Kernel Debug Kits are prohibited for root patching")
 
 
     def _matching_kdk_already_merged(self, kdk_path: str) -> bool:
@@ -140,12 +162,18 @@ class KernelDebugKitMerge:
         kdk_obj = self._kdk_object() if self.manual_kdk_candidate is not None else None
         if kdk_obj is not None and kdk_obj.success is False:
             raise Exception(f"Unable to get selected KDK info: {kdk_obj.error_msg}")
+        if kdk_obj is not None:
+            self._require_permitted_build(kdk_obj.kdk_url_build)
 
         # If a KDK was pre-downloaded, install it. An already-installed manual
         # selection deliberately ignores unrelated stale download artifacts.
         if self.constants.kdk_download_path.exists() and not (
             kdk_obj is not None and kdk_obj.kdk_already_installed
         ):
+            predownload_build = self._predownload_kdk_build()
+            if predownload_build is None:
+                raise Exception("Predownloaded KDK build identity could not be established")
+            self._require_permitted_build(predownload_build)
             if self._manual_download_matches_selection() is False:
                 raise Exception("Predownloaded KDK does not match the manual selection; no substitute KDK will be used")
             if kdk_handler.KernelDebugKitUtilities().install_kdk_dmg(self.constants.kdk_download_path) is False:
@@ -158,6 +186,7 @@ class KernelDebugKitMerge:
         if kdk_obj.success is False:
             logging.info(f"Unable to get KDK info: {kdk_obj.error_msg}")
             raise Exception(f"Unable to get KDK info: {kdk_obj.error_msg}")
+        self._require_permitted_build(kdk_obj.kdk_url_build)
 
         # If no KDK is installed, download and install it
         if kdk_obj.kdk_already_installed is False:
@@ -189,6 +218,7 @@ class KernelDebugKitMerge:
             if kdk_obj.success is False:
                 logging.info(f"Unable to get KDK info: {kdk_obj.error_msg}")
                 raise Exception(f"Unable to get KDK info: {kdk_obj.error_msg}")
+            self._require_permitted_build(kdk_obj.kdk_url_build)
 
             if kdk_obj.kdk_already_installed is False:
                 # We shouldn't get here, but just in case
@@ -200,6 +230,11 @@ class KernelDebugKitMerge:
         if kdk_path is None:
             logging.info(f"- Unable to find Kernel Debug Kit")
             raise Exception("Unable to find Kernel Debug Kit")
+
+        installed_identity = KernelDebugKitIdentity.from_installed_path(kdk_path)
+        if installed_identity is None:
+            raise Exception("Installed KDK build identity could not be established")
+        self._require_permitted_build(installed_identity.build)
 
         logging.info(f"- Found KDK at: {kdk_path}")
 

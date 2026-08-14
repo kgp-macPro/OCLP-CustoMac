@@ -11,6 +11,25 @@ from enum import StrEnum
 from pathlib import Path
 
 
+BLOCKED_ROOT_PATCH_KDK_DARWIN_MAJORS = frozenset({26})
+
+
+def kdk_darwin_major(build: object) -> int | None:
+    """Return the Darwin major encoded by an Apple build identifier."""
+    if not isinstance(build, str):
+        return None
+    match = re.match(r"^(\d+)", build.strip())
+    if match is None:
+        return None
+    return int(match.group(1))
+
+
+def root_patch_kdk_build_allowed(build: object) -> bool:
+    """Central root-patching policy for KDK build acceptance."""
+    darwin_major = kdk_darwin_major(build)
+    return darwin_major is not None and darwin_major not in BLOCKED_ROOT_PATCH_KDK_DARWIN_MAJORS
+
+
 class KDKSelectionMode(StrEnum):
     """Historical resolver mode used by one completed root-patch operation."""
 
@@ -87,13 +106,21 @@ class KernelDebugKitCandidate:
     def catalog_identity(self) -> tuple[str, str, str, int]:
         return (self.version, self.build, self.url, self.file_size)
 
+    def allowed_for_root_patching(self) -> bool:
+        return root_patch_kdk_build_allowed(self.build)
+
     def is_tahoe(self) -> bool:
         try:
             version = packaging.version.parse(self.version)
         except Exception:
             return False
         build_match = re.match(r"^(\d+)", self.build)
-        return version.major == 26 and build_match is not None and int(build_match.group(1)) == 25
+        return (
+            version.major == 26
+            and build_match is not None
+            and int(build_match.group(1)) == 25
+            and self.allowed_for_root_patching()
+        )
 
 
 @dataclass(frozen=True)

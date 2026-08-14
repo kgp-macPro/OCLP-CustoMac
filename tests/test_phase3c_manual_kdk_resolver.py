@@ -184,11 +184,17 @@ class Phase3CManualMergeTests(unittest.TestCase):
             download = Path(temporary) / "stale.dmg"
             download.touch()
             constants_obj = constants(download)
-            resolver = mock.Mock(success=True, kdk_already_installed=True, kdk_installed_path="/exact/25G72.kdk")
+            resolver = mock.Mock(
+                success=True,
+                kdk_already_installed=True,
+                kdk_installed_path="/exact/25G72.kdk",
+                kdk_url_build=OTHER.build,
+            )
             merger = kdk_merge.KernelDebugKitMerge(constants_obj, "/mount", False, manual_kdk_candidate=OTHER)
             merger._kdk_object = mock.Mock(return_value=resolver)
             merger._matching_kdk_already_merged = mock.Mock(return_value=True)
-            with mock.patch.object(kdk_handler.KernelDebugKitUtilities, "install_kdk_dmg") as install:
+            with mock.patch.object(kdk_handler.KernelDebugKitUtilities, "install_kdk_dmg") as install, \
+                 mock.patch.object(kdk_merge.KernelDebugKitIdentity, "from_installed_path", return_value=mock.Mock(build=OTHER.build)):
                 result = merger.merge()
             install.assert_not_called()
             self.assertEqual(result, Path("/exact/25G72.kdk"))
@@ -200,7 +206,11 @@ class Phase3CManualMergeTests(unittest.TestCase):
             with (download.parent / kdk_handler.KDK_INFO_PLIST).open("wb") as info_file:
                 plistlib.dump({"build": EXACT.build, "version": EXACT.version}, info_file)
             merger = kdk_merge.KernelDebugKitMerge(constants(download), "/mount", False, manual_kdk_candidate=OTHER)
-            merger._kdk_object = mock.Mock(return_value=mock.Mock(success=True, kdk_already_installed=False))
+            merger._kdk_object = mock.Mock(return_value=mock.Mock(
+                success=True,
+                kdk_already_installed=False,
+                kdk_url_build=OTHER.build,
+            ))
             with mock.patch.object(kdk_handler.KernelDebugKitUtilities, "install_kdk_dmg") as install:
                 with self.assertRaisesRegex(Exception, "does not match"):
                     merger.merge()
@@ -210,7 +220,7 @@ class Phase3CManualMergeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             download = Path(temporary) / "missing.dmg"
             merger = kdk_merge.KernelDebugKitMerge(constants(download), "/mount", False, manual_kdk_candidate=OTHER)
-            resolver = mock.Mock(success=True, kdk_already_installed=False)
+            resolver = mock.Mock(success=True, kdk_already_installed=False, kdk_url_build=OTHER.build)
             merger._kdk_object = mock.Mock(return_value=resolver)
             with self.assertRaisesRegex(Exception, "no substitute or silent download"):
                 merger.merge()

@@ -4,6 +4,7 @@ kdk_handler.py: Module for parsing and determining best Kernel Debug Kit for hos
 
 import logging
 import plistlib
+import re
 import requests
 import tempfile
 import subprocess
@@ -21,7 +22,7 @@ from . import (
     network_handler,
     subprocess_wrapper
 )
-from .kdk_selection import KernelDebugKitCandidate
+from .kdk_selection import KernelDebugKitCandidate, root_patch_kdk_build_allowed
 
 KDK_INSTALL_PATH: str  = "/Library/Developer/KDKs"
 KDK_INFO_PLIST:   str  = "KDKInfo.plist"
@@ -143,15 +144,21 @@ class KernelDebugKitObject:
         candidates = []
         for entry in catalog:
             try:
-                candidates.append(KernelDebugKitCandidate.from_catalog_entry(entry))
+                candidate = KernelDebugKitCandidate.from_catalog_entry(entry)
             except (KeyError, TypeError, ValueError):
                 continue
+            if candidate.allowed_for_root_patching() is False:
+                logging.warning(f"Ignoring prohibited Darwin 26 KDK catalog candidate: {candidate.build}")
+                continue
+            candidates.append(candidate)
         return tuple(candidates)
 
 
     def resolved_candidate(self) -> KernelDebugKitCandidate | None:
         """Expose the existing automatic resolver result without starting an action."""
         if not all((self.kdk_url_version, self.kdk_url_build, self.kdk_url)):
+            return None
+        if root_patch_kdk_build_allowed(self.kdk_url_build) is False:
             return None
         return KernelDebugKitCandidate(
             version=self.kdk_url_version,
@@ -163,6 +170,8 @@ class KernelDebugKitObject:
 
     def installed_path_for_build(self, build: str) -> Path | None:
         """Read-only installed-KDK lookup for dialog status annotation."""
+        if root_patch_kdk_build_allowed(build) is False:
+            return None
         install_root = Path(KDK_INSTALL_PATH)
         if not install_root.exists():
             return None
@@ -179,7 +188,7 @@ class KernelDebugKitObject:
     def _get_selected_kdk(self) -> None:
         """Resolve one exact trusted-catalog identity without automatic fallback."""
         selected = self.selected_candidate
-        if selected is None or selected.is_tahoe() is False:
+        if selected is None or selected.is_tahoe() is False or selected.allowed_for_root_patching() is False:
             self.error_msg = "The manually selected Kernel Debug Kit is not an eligible macOS Tahoe KDK"
             return
 
@@ -270,6 +279,14 @@ class KernelDebugKitObject:
 
             return
 
+        permitted_remote_kdks = []
+        for kdk in remote_kdk_version:
+            if not isinstance(kdk, dict) or root_patch_kdk_build_allowed(kdk.get("build")) is False:
+                logging.warning(f"Ignoring ineligible KDK catalog entry: {kdk!r}")
+                continue
+            permitted_remote_kdks.append(kdk)
+        remote_kdk_version = permitted_remote_kdks
+
         # First check exact match
         for kdk in remote_kdk_version:
             if (kdk["build"] != host_build):
@@ -346,6 +363,11 @@ class KernelDebugKitObject:
         self.success = False
         self.error_msg = ""
 
+        if root_patch_kdk_build_allowed(self.kdk_url_build) is False:
+            self.error_msg = "Darwin 26 Kernel Debug Kits are prohibited for root patching"
+            logging.error(self.error_msg)
+            return None
+
         if self.kdk_already_installed:
             logging.info("No download required, KDK already installed")
             self.success = True
@@ -418,6 +440,9 @@ class KernelDebugKitObject:
             return False
 
         kdk_build = kdk_plist_data["ProductBuildVersion"]
+        if root_patch_kdk_build_allowed(kdk_build) is False:
+            logging.warning(f"Ignoring prohibited Darwin 26 KDK: {kdk_path.name}")
+            return False
 
         # Check pkg receipts for this build, will give a canonical list if all files that should be present
         result = subprocess.run(["/usr/sbin/pkgutil", "--files", f"com.apple.pkg.KDK.{kdk_build}"], capture_output=True)
@@ -489,6 +514,10 @@ class KernelDebugKitObject:
             else:
                 match = self.host_build
 
+        if check_version is False and root_patch_kdk_build_allowed(match) is False:
+            logging.warning(f"Refusing prohibited Darwin 26 KDK lookup: {match}")
+            return None
+
         if not Path(KDK_INSTALL_PATH).exists():
             return None
 
@@ -520,6 +549,11 @@ class KernelDebugKitObject:
             else:
                 if not kdk_pkg.name.endswith(f"{match}.pkg"):
                     continue
+
+            package_build_match = re.search(r"_(\d+[A-Za-z][A-Za-z0-9]*)\.pkg$", kdk_pkg.name)
+            if package_build_match and root_patch_kdk_build_allowed(package_build_match.group(1)) is False:
+                logging.warning(f"Ignoring prohibited Darwin 26 KDK backup: {kdk_pkg.name}")
+                continue
 
             logging.info(f"Found KDK backup: {kdk_pkg.name}")
             if self.passive is False:
