@@ -61,10 +61,12 @@ from ..datasets import (
     os_data
 )
 from ..support import (
+    kdk_handler,
     utilities,
     subprocess_wrapper,
     metallib_handler
 )
+from ..support.kdk_selection import KernelDebugKitCandidate
 from .patchsets import (
     HardwarePatchsetDetection,
     HardwarePatchsetSettings,
@@ -88,6 +90,7 @@ class PatchSysVolume:
         hardware_details: dict = None,
         patch_selection: RootPatchSelection = None,
         expected_patch_selection: tuple[str, ...] = None,
+        manual_kdk_candidate: KernelDebugKitCandidate = None,
     ) -> None:
         self.model = model
         self.constants: constants.Constants = global_constants
@@ -98,6 +101,7 @@ class PatchSysVolume:
         self.patch_set_dictionary = {}
         self.patch_selection = patch_selection
         self.expected_patch_selection = expected_patch_selection
+        self.manual_kdk_candidate = manual_kdk_candidate
         self.needs_kmutil_exemptions = False # For '/Library/Extensions' rebuilds
         self.kdk_path = None
         self.metallib_path = None
@@ -204,7 +208,8 @@ class PatchSysVolume:
         self.kdk_path = KernelDebugKitMerge(
             self.constants,
             self.mount_location,
-            self.skip_root_kmutil_requirement
+            self.skip_root_kmutil_requirement,
+            manual_kdk_candidate=self.manual_kdk_candidate,
         ).merge(save_hid_cs)
 
 
@@ -610,6 +615,23 @@ class PatchSysVolume:
             logging.error("- Cannot continue with patching!!!")
             patchset_obj.detailed_errors()
             return
+
+        manual_kdk_candidate = getattr(self, "manual_kdk_candidate", None)
+        if manual_kdk_candidate is not None:
+            if patchset_obj.device_properties[HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED] is False:
+                logging.error("- Manual KDK selection is invalid because the requested patches no longer require a KDK")
+                return
+            manual_kdk = kdk_handler.KernelDebugKitObject(
+                self.constants,
+                self.constants.detected_os_build,
+                self.constants.detected_os_version,
+                ignore_installed=True,
+                passive=True,
+                selected_candidate=manual_kdk_candidate,
+            )
+            if manual_kdk.success is False or manual_kdk.resolved_candidate() != manual_kdk_candidate:
+                logging.error("- Manual KDK selection is no longer valid; no substitute KDK will be used")
+                return
 
         self._apply_hardware_details(patchset_obj.device_properties)
 

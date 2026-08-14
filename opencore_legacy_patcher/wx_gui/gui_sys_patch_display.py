@@ -290,20 +290,6 @@ class SysPatchDisplayFrame(wx.Frame):
         self.requested_patchset = requested_patchset
         self.root_state = root_state
 
-        kdk_required = bool(
-            getattr(detection, "device_properties", {}).get(
-                HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED,
-                False,
-            )
-        )
-        self.manual_kdk_state = getattr(
-            self,
-            "manual_kdk_state",
-            ManualKDKSelectionState(),
-        ).for_requirement(kdk_required)
-        if getattr(self, "manual_kdk_checkbox", None) is not None:
-            self.manual_kdk_checkbox.Enable(kdk_required)
-            self.manual_kdk_checkbox.SetValue(self.manual_kdk_state.enabled)
         self._refresh_selection_state()
 
         # Set frame size
@@ -324,6 +310,21 @@ class SysPatchDisplayFrame(wx.Frame):
         self.current_detection = detection
         self.requested_patchset = requested_patchset
         self.root_state = root_state
+
+        kdk_required = bool(
+            getattr(detection, "device_properties", {}).get(
+                HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED,
+                False,
+            )
+        )
+        self.manual_kdk_state = getattr(
+            self,
+            "manual_kdk_state",
+            ManualKDKSelectionState(),
+        ).for_requirement(kdk_required)
+        if getattr(self, "manual_kdk_checkbox", None) is not None:
+            self.manual_kdk_checkbox.Enable(kdk_required)
+            self.manual_kdk_checkbox.SetValue(self.manual_kdk_state.enabled)
 
         for identifier, checkbox in self.selection_checkboxes.items():
             checkbox.SetValue(self.selection.is_selected(identifier))
@@ -427,6 +428,18 @@ class SysPatchDisplayFrame(wx.Frame):
                     "Root patch applicability or selection changed. Return to Root Patch Selection and review the current request.",
                     "Root Patching Blocked",
                     wx.OK | wx.ICON_WARNING,
+                )
+                return
+            try:
+                refreshed_context = KDKSelectionContext.from_system(self.constants)
+            except Exception as error:
+                logging.error(f"Unable to revalidate the selected Kernel Debug Kit: {error}")
+                refreshed_context = None
+            if refreshed_context is None or refreshed_context.status_for(manual_kdk_candidate) is None:
+                wx.MessageBox(
+                    "The selected Kernel Debug Kit is no longer available in the official catalog. No substitute KDK will be used.",
+                    "Kernel Debug Kit Selection Changed",
+                    wx.OK | wx.ICON_ERROR,
                 )
                 return
         frame = gui_sys_patch_start.SysPatchStartFrame(

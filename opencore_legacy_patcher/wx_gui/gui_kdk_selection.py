@@ -21,7 +21,7 @@ def candidate_status_text(status: KDKCandidateStatus) -> str:
 
 def candidate_display_text(status: KDKCandidateStatus) -> str:
     candidate = status.candidate
-    return f"macOS {candidate.version} — Build {candidate.build}\n{candidate_status_text(status)}"
+    return f"macOS {candidate.version} — Build {candidate.build} — {candidate_status_text(status)}"
 
 
 def automatic_choice_text(context: KDKSelectionContext) -> str:
@@ -31,7 +31,11 @@ def automatic_choice_text(context: KDKSelectionContext) -> str:
     status = context.status_for(candidate)
     if status is None:
         return "OCLP automatic selection:\nNo eligible automatic KDK selection is available."
-    return f"OCLP automatic selection:\n{candidate_display_text(status)}"
+    return (
+        "OCLP automatic selection:\n"
+        f"macOS {candidate.version} — Build {candidate.build}\n"
+        f"{candidate_status_text(status)}"
+    )
 
 
 class ManualKDKSelectionDialog(wx.Dialog):
@@ -108,6 +112,7 @@ class ManualKDKSelectionDialog(wx.Dialog):
             "Confirm Kernel Debug Kit",
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_INFORMATION,
         )
+        confirmation.SetYesNoLabels("Use This KDK", "Cancel")
         if confirmation.ShowModal() != wx.ID_YES:
             return
 

@@ -123,6 +123,50 @@ class SysPatchStartFrame(wx.Frame):
         return detection
 
 
+    def _revalidate_manual_kdk(self, detection: HardwarePatchsetDetection) -> bool:
+        if self.manual_kdk_candidate is None:
+            return True
+        if detection.device_properties[HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED] is False:
+            wx.MessageBox(
+                "The selected patches no longer require a Kernel Debug Kit. Return to Root Patch Selection and review the current request.",
+                "Root Patching Blocked",
+                wx.OK | wx.ICON_WARNING,
+            )
+            return False
+        resolver = kdk_handler.KernelDebugKitObject(
+            self.constants,
+            self.constants.detected_os_build,
+            self.constants.detected_os_version,
+            ignore_installed=True,
+            passive=True,
+            selected_candidate=self.manual_kdk_candidate,
+        )
+        if resolver.success is False or resolver.resolved_candidate() != self.manual_kdk_candidate:
+            wx.MessageBox(
+                "The selected Kernel Debug Kit could not be obtained or validated. No substitute KDK will be used while manual selection is enabled.",
+                "Kernel Debug Kit Selection Failed",
+                wx.OK | wx.ICON_ERROR,
+            )
+            return False
+        return True
+
+
+    def _return_to_root_patch_selection(self) -> None:
+        """Unwind the normal progress frame after a manual-mode preflight failure."""
+        from . import gui_sys_patch_display
+
+        if self.frame_modal is not None:
+            self.frame_modal.Hide()
+            self.frame_modal.Destroy()
+        self.Hide()
+        self.Destroy()
+        gui_sys_patch_display.SysPatchDisplayFrame(
+            parent=None,
+            title=self.title,
+            global_constants=self.constants,
+        )
+
+
     def _kdk_download(self, frame: wx.Frame = None) -> bool:
         frame = self if not frame else frame
 
@@ -149,7 +193,12 @@ class SysPatchStartFrame(wx.Frame):
         # Generate KDK object
         self.kdk_obj: kdk_handler.KernelDebugKitObject = None
         def _kdk_thread_spawn():
-            self.kdk_obj = kdk_handler.KernelDebugKitObject(self.constants, self.constants.detected_os_build, self.constants.detected_os_version)
+            self.kdk_obj = kdk_handler.KernelDebugKitObject(
+                self.constants,
+                self.constants.detected_os_build,
+                self.constants.detected_os_version,
+                selected_candidate=self.manual_kdk_candidate,
+            )
 
         kdk_thread = threading.Thread(target=_kdk_thread_spawn)
         kdk_thread.start()
@@ -373,7 +422,13 @@ class SysPatchStartFrame(wx.Frame):
 
 
     def start_root_patching(self):
-        if self._revalidate_patch_selection() is None:
+        detection = self._revalidate_patch_selection()
+        if detection is None:
+            if self.manual_kdk_candidate is not None:
+                self._return_to_root_patch_selection()
+            return
+        if self._revalidate_manual_kdk(detection) is False:
+            self._return_to_root_patch_selection()
             return
 
         logging.info("Starting root patching")
@@ -381,11 +436,20 @@ class SysPatchStartFrame(wx.Frame):
             wx.Yield()
             time.sleep(self.constants.thread_sleep_interval)
 
-        if self._revalidate_patch_selection() is None:
+        detection = self._revalidate_patch_selection()
+        if detection is None:
+            if self.manual_kdk_candidate is not None:
+                self._return_to_root_patch_selection()
+            return
+        if self._revalidate_manual_kdk(detection) is False:
+            self._return_to_root_patch_selection()
             return
 
         if self.patches[HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED] is True:
             if self._kdk_download(self) is False:
+                if self.manual_kdk_candidate is not None:
+                    self._return_to_root_patch_selection()
+                    return
                 sys.exit(1)
 
         if self.patches[HardwarePatchsetSettings.METALLIB_SUPPORT_PKG_REQUIRED] is True:
@@ -414,6 +478,7 @@ class SysPatchStartFrame(wx.Frame):
                 patches,
                 patch_selection=self.patch_selection,
                 expected_patch_selection=self.expected_patch_selection,
+                manual_kdk_candidate=self.manual_kdk_candidate,
             ).start_patch()
         except:
             logging.error("An internal error occurred while running the Root Patcher:\n")

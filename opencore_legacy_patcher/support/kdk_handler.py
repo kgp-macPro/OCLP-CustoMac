@@ -57,7 +57,8 @@ class KernelDebugKitObject:
     def __init__(self, global_constants: constants.Constants,
                  host_build: str, host_version: str,
                  ignore_installed: bool = False, passive: bool = False,
-                 check_backups_only: bool = False
+                 check_backups_only: bool = False,
+                 selected_candidate: KernelDebugKitCandidate = None,
         ) -> None:
 
         self.constants: constants.Constants = global_constants
@@ -69,6 +70,7 @@ class KernelDebugKitObject:
 
         self.ignore_installed:      bool = ignore_installed   # If True, will ignore any installed KDKs and download the latest
         self.check_backups_only:    bool = check_backups_only # If True, will only check for KDK backups, not KDKs already installed
+        self.selected_candidate = selected_candidate
         self.kdk_already_installed: bool = False
 
         self.kdk_installed_path: str = ""
@@ -91,7 +93,10 @@ class KernelDebugKitObject:
 
         self.error_msg: str = ""
 
-        self._get_latest_kdk()
+        if self.selected_candidate is None:
+            self._get_latest_kdk()
+        else:
+            self._get_selected_kdk()
 
 
     def _get_remote_kdks(self) -> list:
@@ -169,6 +174,40 @@ class KernelDebugKitObject:
             if self._local_kdk_valid(kdk_folder):
                 return kdk_folder
         return None
+
+
+    def _get_selected_kdk(self) -> None:
+        """Resolve one exact trusted-catalog identity without automatic fallback."""
+        selected = self.selected_candidate
+        if selected is None or selected.is_tahoe() is False:
+            self.error_msg = "The manually selected Kernel Debug Kit is not an eligible macOS Tahoe KDK"
+            return
+
+        catalog_match = next(
+            (
+                candidate
+                for candidate in self.available_candidates()
+                if candidate.catalog_identity() == selected.catalog_identity()
+            ),
+            None,
+        )
+        if catalog_match is None:
+            self.error_msg = (
+                "The manually selected Kernel Debug Kit is no longer present in the trusted KDK catalog. "
+                "No substitute KDK will be used."
+            )
+            return
+
+        self.kdk_url = catalog_match.url
+        self.kdk_url_build = catalog_match.build
+        self.kdk_url_version = catalog_match.version
+        self.kdk_url_expected_size = catalog_match.file_size
+        self.kdk_url_is_exactly_match = catalog_match.build == self.host_build
+
+        self.kdk_installed_path = self._local_kdk_installed(match=catalog_match.build)
+        if self.kdk_installed_path:
+            self.kdk_already_installed = True
+        self.success = True
 
 
     def _get_latest_kdk(self, host_build: str = None, host_version: str = None) -> None:
@@ -344,7 +383,8 @@ class KernelDebugKitObject:
 
         try:
             plist_path.touch()
-            plistlib.dump(kdk_dict, plist_path.open("wb"), sort_keys=False)
+            with plist_path.open("wb") as plist_file:
+                plistlib.dump(kdk_dict, plist_file, sort_keys=False)
         except Exception as e:
             logging.error(f"Failed to generate KDK Info.plist: {e}")
 

@@ -14,6 +14,10 @@ from opencore_legacy_patcher.support.kdk_selection import (
     ManualKDKSelectionState,
 )
 from opencore_legacy_patcher.wx_gui import gui_kdk_selection
+from opencore_legacy_patcher.wx_gui import gui_sys_patch_display
+from opencore_legacy_patcher.sys_patch.patchsets import HardwarePatchsetSettings
+from opencore_legacy_patcher.sys_patch.root_selection import RootPatchSelection
+from opencore_legacy_patcher.sys_patch.root_state import RootPatchState
 
 
 EXACT = KernelDebugKitCandidate("26.6.2", "25G82", "https://example/25G82.dmg", 82)
@@ -21,6 +25,39 @@ CLOSEST = KernelDebugKitCandidate("26.6", "25G72", "https://example/25G72.dmg", 
 
 
 class Phase3CManualKDKGUIStateTests(unittest.TestCase):
+    def _refresh_display(self, *, kdk_required: bool, manual_state=None, patch_allowed=True):
+        checkbox = mock.Mock()
+        display = types.SimpleNamespace(
+            constants=types.SimpleNamespace(),
+            selection=RootPatchSelection(frozenset(), frozenset()),
+            selection_checkboxes={},
+            selection_summary=mock.Mock(),
+            selection_state_label=mock.Mock(),
+            start_button=mock.Mock(),
+            revert_button=mock.Mock(),
+            manual_kdk_checkbox=checkbox,
+            manual_kdk_state=manual_state or ManualKDKSelectionState(),
+            _applicable_patchsets=lambda detection: detection.applicable_patchsets,
+        )
+        detection = types.SimpleNamespace(
+            applicable_patchsets=(),
+            patches={"Future KDK Patch": {}},
+            device_properties={HardwarePatchsetSettings.KERNEL_DEBUG_KIT_REQUIRED: kdk_required},
+            can_patch=True,
+            can_unpatch=True,
+        )
+        root_state = types.SimpleNamespace(
+            state=RootPatchState.CLEAN if patch_allowed else RootPatchState.INSTALLED_SAME,
+            reason="Already installed",
+            patch_allowed=patch_allowed,
+            revert_allowed=lambda can_unpatch: not patch_allowed,
+        )
+        with mock.patch.object(gui_sys_patch_display, "HardwarePatchsetDetection", return_value=detection), \
+             mock.patch.object(gui_sys_patch_display, "RootPatchStateEvaluator") as evaluator:
+            evaluator.return_value.evaluate.return_value = root_state
+            gui_sys_patch_display.SysPatchDisplayFrame._refresh_selection_state(display)
+        return display, checkbox
+
     def test_manual_mode_defaults_off_and_requires_a_kdk(self) -> None:
         state = ManualKDKSelectionState()
         self.assertFalse(state.enabled)
@@ -34,6 +71,24 @@ class Phase3CManualKDKGUIStateTests(unittest.TestCase):
         state = state.for_requirement(False)
         self.assertEqual(state, ManualKDKSelectionState())
         self.assertEqual(state.for_requirement(True), ManualKDKSelectionState())
+
+    def test_gui_toggle_is_available_but_off_when_selected_patches_require_kdk(self) -> None:
+        display, checkbox = self._refresh_display(kdk_required=True)
+        checkbox.Enable.assert_called_once_with(True)
+        checkbox.SetValue.assert_called_once_with(False)
+        self.assertFalse(display.manual_kdk_state.enabled)
+
+    def test_gui_disables_and_clears_manual_mode_when_requirement_disappears(self) -> None:
+        selected = ManualKDKSelectionState(True, EXACT)
+        display, checkbox = self._refresh_display(kdk_required=False, manual_state=selected)
+        checkbox.Enable.assert_called_once_with(False)
+        checkbox.SetValue.assert_called_once_with(False)
+        self.assertEqual(display.manual_kdk_state, ManualKDKSelectionState())
+
+    def test_manual_mode_does_not_bypass_installed_same_start_block(self) -> None:
+        selected = ManualKDKSelectionState(True, EXACT)
+        display, _ = self._refresh_display(kdk_required=True, manual_state=selected, patch_allowed=False)
+        display.start_button.Enable.assert_called_once_with(False)
 
     def test_automatic_preview_uses_existing_resolver_and_has_no_package_side_effect(self) -> None:
         resolver = mock.Mock()
@@ -88,6 +143,7 @@ class Phase3CManualKDKGUIStateTests(unittest.TestCase):
             gui_kdk_selection.ManualKDKSelectionDialog._on_confirm(dialog, mock.Mock())
 
         confirmation.ShowModal.assert_called_once_with()
+        confirmation.SetYesNoLabels.assert_called_once_with("Use This KDK", "Cancel")
         self.assertEqual(dialog.selected_candidate, EXACT)
         dialog.EndModal.assert_called_once_with(gui_kdk_selection.wx.ID_OK)
 
@@ -111,6 +167,30 @@ class Phase3CManualKDKGUIStateTests(unittest.TestCase):
 
         self.assertIsNone(dialog.selected_candidate)
         dialog.EndModal.assert_not_called()
+
+    def test_user_can_choose_a_nonautomatic_candidate_and_manual_choice_wins(self) -> None:
+        context = KDKSelectionContext(
+            candidates=(
+                KDKCandidateStatus(EXACT, Path("/installed"), True, True),
+                KDKCandidateStatus(CLOSEST, None, False, False),
+            ),
+            automatic_candidate=EXACT,
+            automatic_exact_match=True,
+        )
+        dialog = types.SimpleNamespace(
+            candidate_list=mock.Mock(GetSelection=mock.Mock(return_value=1)),
+            context=context,
+            selected_candidate=None,
+            EndModal=mock.Mock(),
+        )
+        confirmation = mock.Mock()
+        confirmation.ShowModal.return_value = gui_kdk_selection.wx.ID_YES
+
+        with mock.patch.object(gui_kdk_selection.wx, "MessageDialog", return_value=confirmation):
+            gui_kdk_selection.ManualKDKSelectionDialog._on_confirm(dialog, mock.Mock())
+
+        self.assertEqual(dialog.selected_candidate, CLOSEST)
+        dialog.EndModal.assert_called_once_with(gui_kdk_selection.wx.ID_OK)
 
 
 if __name__ == "__main__":

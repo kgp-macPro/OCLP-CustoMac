@@ -9,16 +9,48 @@ from ... import constants
 
 from ...datasets import os_data
 from ...support import subprocess_wrapper, kdk_handler
+from ...support.kdk_selection import KernelDebugKitCandidate
 from ...volume import generate_copy_arguments
 from ..root_state import ROOT_PATCH_METADATA_PATH
 
 
 class KernelDebugKitMerge:
 
-    def __init__(self, global_constants: constants.Constants, mount_location: str, skip_root_kmutil_requirement: bool) -> None:
+    def __init__(
+        self,
+        global_constants: constants.Constants,
+        mount_location: str,
+        skip_root_kmutil_requirement: bool,
+        manual_kdk_candidate: KernelDebugKitCandidate = None,
+    ) -> None:
         self.constants: constants.Constants = global_constants
         self.mount_location = mount_location
         self.skip_root_kmutil_requirement = skip_root_kmutil_requirement
+        self.manual_kdk_candidate = manual_kdk_candidate
+
+
+    def _kdk_object(self) -> kdk_handler.KernelDebugKitObject:
+        return kdk_handler.KernelDebugKitObject(
+            self.constants,
+            self.constants.detected_os_build,
+            self.constants.detected_os_version,
+            selected_candidate=self.manual_kdk_candidate,
+        )
+
+
+    def _manual_download_matches_selection(self) -> bool:
+        if self.manual_kdk_candidate is None:
+            return True
+        info_path = self.constants.kdk_download_path.parent / kdk_handler.KDK_INFO_PLIST
+        try:
+            with info_path.open("rb") as info_file:
+                info = plistlib.load(info_file)
+        except (FileNotFoundError, OSError, plistlib.InvalidFileException):
+            return False
+        return (
+            info.get("build") == self.manual_kdk_candidate.build
+            and info.get("version") == self.manual_kdk_candidate.version
+        )
 
 
     def _matching_kdk_already_merged(self, kdk_path: str) -> bool:
@@ -103,20 +135,37 @@ class KernelDebugKitMerge:
         if self.constants.detected_os < os_data.os_data.ventura:
             return None
 
-        # If a KDK was pre-downloaded, install it
-        if self.constants.kdk_download_path.exists():
+        # Manual mode resolves the exact catalog identity before considering a
+        # predownloaded asset, so stale assets can never substitute another KDK.
+        kdk_obj = self._kdk_object() if self.manual_kdk_candidate is not None else None
+        if kdk_obj is not None and kdk_obj.success is False:
+            raise Exception(f"Unable to get selected KDK info: {kdk_obj.error_msg}")
+
+        # If a KDK was pre-downloaded, install it. An already-installed manual
+        # selection deliberately ignores unrelated stale download artifacts.
+        if self.constants.kdk_download_path.exists() and not (
+            kdk_obj is not None and kdk_obj.kdk_already_installed
+        ):
+            if self._manual_download_matches_selection() is False:
+                raise Exception("Predownloaded KDK does not match the manual selection; no substitute KDK will be used")
             if kdk_handler.KernelDebugKitUtilities().install_kdk_dmg(self.constants.kdk_download_path) is False:
                 logging.info("Failed to install KDK")
                 raise Exception("Failed to install KDK")
 
-        # Next, grab KDK information (ie. what's the latest KDK for this OS)
-        kdk_obj = kdk_handler.KernelDebugKitObject(self.constants, self.constants.detected_os_build, self.constants.detected_os_version)
+        # AUTO follows the inherited resolver. MANUAL resolves only the exact
+        # trusted-catalog identity selected for this operation.
+        kdk_obj = self._kdk_object()
         if kdk_obj.success is False:
             logging.info(f"Unable to get KDK info: {kdk_obj.error_msg}")
             raise Exception(f"Unable to get KDK info: {kdk_obj.error_msg}")
 
         # If no KDK is installed, download and install it
         if kdk_obj.kdk_already_installed is False:
+            if self.manual_kdk_candidate is not None:
+                raise Exception(
+                    "The manually selected KDK is not installed and its validated predownload is unavailable; "
+                    "no substitute or silent download will be used"
+                )
             kdk_download_obj = kdk_obj.retrieve_download()
             if not kdk_download_obj:
                 logging.info(f"Could not retrieve KDK: {kdk_obj.error_msg}")
@@ -136,7 +185,7 @@ class KernelDebugKitMerge:
 
             kdk_handler.KernelDebugKitUtilities().install_kdk_dmg(self.constants.kdk_download_path)
             # re-init kdk_obj to get the new kdk_installed_path
-            kdk_obj = kdk_handler.KernelDebugKitObject(self.constants, self.constants.detected_os_build, self.constants.detected_os_version)
+            kdk_obj = self._kdk_object()
             if kdk_obj.success is False:
                 logging.info(f"Unable to get KDK info: {kdk_obj.error_msg}")
                 raise Exception(f"Unable to get KDK info: {kdk_obj.error_msg}")
