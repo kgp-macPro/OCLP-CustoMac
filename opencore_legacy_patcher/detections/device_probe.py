@@ -7,6 +7,7 @@ import itertools
 import subprocess
 import plistlib
 import hashlib
+import logging
 
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -570,6 +571,23 @@ class Atheros(WirelessCard):
 
 
 @dataclass
+class IntelWirelessCard(WirelessCard):
+    VENDOR_ID: ClassVar[int] = 0x8086
+
+    class Chipsets(enum.Enum):
+        AirportItlwm = "AirportItlwm supported"
+        Unknown = "Unknown"
+
+    chipset: Chipsets = field(init=False)
+
+    def detect_chipset(self):
+        if self.device_id in pci_data.intel_wireless_ids.AirportItlwm:
+            self.chipset = IntelWirelessCard.Chipsets.AirportItlwm
+        else:
+            self.chipset = IntelWirelessCard.Chipsets.Unknown
+
+
+@dataclass
 class Aquantia(EthernetController):
     VENDOR_ID: ClassVar[int] = 0x1D6A
 
@@ -635,6 +653,7 @@ class Computer:
     sdxc_controller: list[PCIDevice] = field(default_factory=list)
     ethernet: list[EthernetController] = field(default_factory=list)
     wifi: Optional[WirelessCard] = None
+    wifi_devices: list[WirelessCard] = field(default_factory=list)
     cpu: Optional[CPU] = None
     usb_devices: list[USBDevice] = field(default_factory=list)
     oclp_version: Optional[str] = None
@@ -743,8 +762,26 @@ class Computer:
         for device in devices:
             vendor: Type[WirelessCard] = PCIDevice.from_ioregistry(device, anti_spoof=True).vendor_detect(inherits=WirelessCard)  # type: ignore
             if vendor:
-                self.wifi = vendor.from_ioregistry(device, anti_spoof=True)  # type: ignore
-                break
+                detected_wifi = vendor.from_ioregistry(device, anti_spoof=True)  # type: ignore
+                self.wifi_devices.append(detected_wifi)
+
+                if (
+                    isinstance(detected_wifi, IntelWirelessCard)
+                    and detected_wifi.chipset == IntelWirelessCard.Chipsets.AirportItlwm
+                ):
+                    logging.info(
+                        f"- Detected supported Intel Modern Wireless device: "
+                        f"{detected_wifi.vendor_id:04X}:{detected_wifi.device_id:04X}"
+                    )
+
+                # Keep the historical non-Intel card as the primary shortcut
+                # when a machine exposes both Intel and another Wi-Fi device.
+                # Root-patch detection consumes the complete inventory below.
+                if self.wifi is None or (
+                    isinstance(self.wifi, IntelWirelessCard)
+                    and not isinstance(detected_wifi, IntelWirelessCard)
+                ):
+                    self.wifi = detected_wifi
             ioreg.IOObjectRelease(device)
 
     def ambient_light_sensor_probe(self):

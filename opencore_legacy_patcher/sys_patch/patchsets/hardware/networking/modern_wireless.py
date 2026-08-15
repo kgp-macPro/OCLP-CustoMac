@@ -29,14 +29,26 @@ class ModernWireless(BaseHardware):
         """
         Targeting Modern Wireless
         """
-        return isinstance(self._computer.wifi, device_probe.Broadcom) and (
-            self._computer.wifi.chipset in [
-                device_probe.Broadcom.Chipsets.AirPortBrcm4360,
-                device_probe.Broadcom.Chipsets.AirportBrcmNIC,
-                # We don't officially support this chipset, however we'll throw a bone to hackintosh users
-                device_probe.Broadcom.Chipsets.AirPortBrcmNICThirdParty,
-            ]
-        )
+        wifi_devices = getattr(self._computer, "wifi_devices", None)
+        if not wifi_devices:
+            wifi_devices = [getattr(self._computer, "wifi", None)]
+
+        for wifi in wifi_devices:
+            if isinstance(wifi, device_probe.Broadcom) and (
+                wifi.chipset in [
+                    device_probe.Broadcom.Chipsets.AirPortBrcm4360,
+                    device_probe.Broadcom.Chipsets.AirportBrcmNIC,
+                    # We don't officially support this chipset, however we'll throw a bone to hackintosh users
+                    device_probe.Broadcom.Chipsets.AirPortBrcmNICThirdParty,
+                ]
+            ):
+                return True
+            if isinstance(wifi, device_probe.IntelWirelessCard) and (
+                wifi.chipset == device_probe.IntelWirelessCard.Chipsets.AirportItlwm
+            ):
+                return True
+
+        return False
 
 
     def native_os(self) -> bool:

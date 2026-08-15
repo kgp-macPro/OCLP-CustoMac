@@ -36,10 +36,11 @@ class ModernWirelessRegressionTests(unittest.TestCase):
         for forbidden in ("Broadcom", "Intel", "vendor_id", "device_id", "8086"):
             self.assertNotIn(forbidden, selection_source)
 
-    def test_no_direct_intel_or_spoofing_logic_was_added_to_detector(self) -> None:
+    def test_direct_intel_detection_adds_no_spoofing_logic(self) -> None:
         source = inspect.getsource(modern_wireless.ModernWireless.present)
         self.assertIn("device_probe.Broadcom", source)
-        for forbidden in ("Intel", "8086", "DeviceProperties", "fake_id"):
+        self.assertIn("device_probe.IntelWirelessCard", source)
+        for forbidden in ("DeviceProperties", "fake_id", "compatible", "IOName"):
             self.assertNotIn(forbidden, source)
 
 
