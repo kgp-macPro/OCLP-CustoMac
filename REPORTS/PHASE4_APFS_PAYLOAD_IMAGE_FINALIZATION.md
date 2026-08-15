@@ -13,7 +13,8 @@ Phase 2, Phase 3B, and Phase 3C remained frozen. No root patch, revert, install,
 - Phase-2/Phase-3 runtime-validated implementation: `62e0b1c0413eb900bda69955030dd5bee28219b6`
 - Phase-2/Phase-3 documentation HEAD at Phase-4 start: `e4d4793bc7fd2d0e5994e70a5f104f5671bc30bb`
 - Phase-4 APFS conversion commit: `b269e61b6c3e88c2b24c85eb09ddd884ca980580`
-- Phase-4 runtime-mount correction commit and clean final artifact source HEAD: `0b6b25161936c672d21a7af82796ff9b80c9d22e`
+- Phase-4 runtime-mount correction commit: `0b6b25161936c672d21a7af82796ff9b80c9d22e`
+- Final Revert/KDK-log cleanup commit and canonical Phase-4 implementation HEAD: `a2b6e60ded9d9cbcc849ab8102de9d58a73f37b0`
 - Documentation HEAD: the docs-only commit containing this report; its exact SHA is recorded in the external completion report because a commit cannot embed its own final SHA.
 
 The previously runtime-validated Phase-2/3 package was not changed:
@@ -342,7 +343,45 @@ Matching artifacts copied from the same clean build:
 - `BUILD_INFO.txt`
 - `SHA256SUMS.txt`
 
-All exported checksums passed after copying. This new runtime-fix candidate has not been installed or root-patch tested by Codex.
+All exported checksums passed after copying. Codex did not install or run it. KGP subsequently used this exact package for a successful real-system BOTH root-patch operation with Modern Wireless ON, Modern Audio ON, and AUTO KDK. The APFS-compatible resource mounts, KDK `26.6.2` / build `25G82` resolution and merge, wireless frameworks and `wifip2pd`, AppleHDA, metadata write, Boot/System KC rebuild, root unmount, snapshot completion, and reboot all completed successfully. After reboot, AppleHDA, Broadcom Wi-Fi, and all tested AWDL functionality worked flawlessly.
+
+## Final Revert log cleanup
+
+Runtime Revert testing exposed redundant repetitions of:
+
+```text
+KDK already installed (KDK_26.6.2_25G82.kdk), skipping
+```
+
+The audit traced these messages to repeated shared `HardwarePatchsetDetection` calls during display refresh, Revert-frame construction, `PatchSysVolume` construction, and operation-time Revert validation. Those read-only detections constructed `KernelDebugKitObject`; its installed fast path emitted the message. Revert did not download, install, or merge a KDK.
+
+Commit `a2b6e60ded9d9cbcc849ab8102de9d58a73f37b0` makes the boundary explicit:
+
+- Revert-specific detection skips KDK availability/resolver probing because it is not a rollback prerequisite;
+- shared GUI state calculations retain required patch/requirement detection but silence irrelevant installed-KDK status;
+- normal Root Patching retains KDK availability checks and useful KDK logging;
+- recovery authorization, SIP/`can_unpatch`, click/operation-time validation, root mounting, and the unchanged last-sealed-snapshot rollback remain intact.
+
+The final cleanup package is:
+
+```text
+/Users/kgp/Desktop/OCLP/OCLP-v2.0-phase4-revert-log-cleanup/OpenCore-Patcher.pkg
+SHA-256: 9beaa5378e92b3fed4a62615d5801a7d9ed48dee905a25a29ceb09bf0fe20ac4
+```
+
+KGP used this package on the successfully Phase-4-patched system. The real Revert completed with the normal truthful unpatch, SkylightPlugins cleanup, Auxiliary KC cleanup, completion, and reboot-required messages; the redundant KDK messages were absent. KGP confirmed the Revert fix as 100% verified.
+
+Runtime evidence is intentionally split. The `0b6b251...` package proves the complete APFS/root-patch path. The subsequent `a2b6e60...` package proves the narrowly scoped Revert-log cleanup. The latter package did not perform the preceding root-patch operation.
+
+## Final Phase-4 status
+
+Phase 4 is **COMPLETE — RUNTIME VALIDATED — FROZEN**. Its final implementation chain is:
+
+1. `b269e61b6c3e88c2b24c85eb09ddd884ca980580` — APFS `payloads.dmg` creation;
+2. `0b6b25161936c672d21a7af82796ff9b80c9d22e` — APFS-compatible unprivileged runtime mounts and noninteractive authentication;
+3. `a2b6e60ded9d9cbcc849ab8102de9d58a73f37b0` — final Revert KDK-log cleanup.
+
+The canonical final Phase-4 source implementation is `a2b6e60ded9d9cbcc849ab8102de9d58a73f37b0`. Phase 2, Phase 3B, and Phase 3C remain complete, runtime validated, and frozen. Phase 5 has not begun.
 
 ## Known limitation
 
