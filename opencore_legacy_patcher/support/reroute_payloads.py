@@ -12,7 +12,7 @@ import logging
 
 from pathlib import Path
 
-from . import subprocess_wrapper
+from . import disk_image, subprocess_wrapper
 
 from .. import constants
 
@@ -40,15 +40,10 @@ class RoutePayloadDiskImage:
             logging.info("Creating payloads directory")
             Path(self.temp_dir.name / Path("payloads")).mkdir(parents=True, exist_ok=True)
             self._unmount_active_dmgs(unmount_all_active=False)
-            output = subprocess.run(
-                [
-                    "/usr/bin/hdiutil", "attach", "-noverify", f"{self.constants.payload_path_dmg}",
-                    "-mountpoint", Path(self.temp_dir.name / Path("payloads")),
-                    "-nobrowse",
-                    "-shadow", Path(self.temp_dir.name / Path("payloads_overlay")),
-                    "-passphrase", "password"
-                ],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+            output = disk_image.attach_protected_disk_image(
+                image_path=self.constants.payload_path_dmg,
+                mountpoint=Path(self.temp_dir.name / Path("payloads")),
+                shadow_path=Path(self.temp_dir.name / Path("payloads_overlay")),
             )
             if output.returncode == 0:
                 logging.info("Mounted payloads.dmg")

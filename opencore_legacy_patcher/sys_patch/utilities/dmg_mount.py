@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ... import constants
 
-from ...support import subprocess_wrapper
+from ...support import disk_image, subprocess_wrapper
 
 
 class PatcherSupportPkgMount:
@@ -28,20 +28,39 @@ class PatcherSupportPkgMount:
             logging.info("- PatcherSupportPkg resources missing, Patcher likely corrupted!!!")
             return False
 
-        output = subprocess.run(
-            [
-                "/usr/bin/hdiutil", "attach", "-noverify", f"{self.constants.payload_local_binaries_root_path_dmg}",
-                "-mountpoint", Path(self.constants.payload_path / Path("Universal-Binaries")),
-                "-nobrowse",
-                "-shadow", Path(self.constants.payload_path / Path("Universal-Binaries_overlay")),
-                "-passphrase", "password"
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        logical_mountpoint = Path(self.constants.payload_local_binaries_root_path)
+        mountpoint = logical_mountpoint
+        shadow_path = Path(self.constants.payload_path / Path("Universal-Binaries_overlay"))
+
+        # macOS refuses to mount an APFS disk image onto a directory inside
+        # another APFS disk-image volume. Keep OCLP's logical payload path but
+        # place the real inner mount beside the outer payload mount, on the
+        # host temporary filesystem, and link to it through the outer shadow.
+        if Path(self.constants.payload_path).is_mount():
+            mountpoint = Path(self.constants.payload_path).parent / logical_mountpoint.name
+            shadow_path = Path(self.constants.payload_path).parent / Path("Universal-Binaries_overlay")
+
+        mountpoint.mkdir(parents=True, exist_ok=True)
+        output = disk_image.attach_protected_disk_image(
+            image_path=self.constants.payload_local_binaries_root_path_dmg,
+            mountpoint=mountpoint,
+            shadow_path=shadow_path,
         )
         if output.returncode != 0:
             logging.info("- Failed to mount Universal-Binaries.dmg")
             subprocess_wrapper.log(output)
             return False
+
+        if mountpoint != logical_mountpoint:
+            try:
+                logical_mountpoint.symlink_to(mountpoint, target_is_directory=True)
+            except OSError:
+                logging.info("- Failed to expose Universal-Binaries.dmg at the expected payload path")
+                subprocess.run(
+                    ["/usr/bin/hdiutil", "detach", mountpoint],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+                )
+                return False
 
         logging.info("- Mounted Universal-Binaries.dmg")
         return True

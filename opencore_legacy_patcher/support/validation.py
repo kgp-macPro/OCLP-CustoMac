@@ -8,7 +8,7 @@ import subprocess
 
 from pathlib import Path
 
-from . import network_handler
+from . import disk_image, network_handler
 
 from .. import constants
 
@@ -212,15 +212,10 @@ class PatcherValidation:
 
         self._unmount_dmg()
 
-        output = subprocess.run(
-            [
-                "/usr/bin/hdiutil", "attach", "-noverify", f"{self.constants.payload_local_binaries_root_path_dmg}",
-                "-mountpoint", Path(self.constants.payload_path / Path("Universal-Binaries")),
-                "-nobrowse",
-                "-shadow", Path(self.constants.payload_path / Path("Universal-Binaries_overlay")),
-                "-passphrase", "password"
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        output = disk_image.attach_protected_disk_image(
+            image_path=self.constants.payload_local_binaries_root_path_dmg,
+            mountpoint=Path(self.constants.payload_path / Path("Universal-Binaries")),
+            shadow_path=Path(self.constants.payload_path / Path("Universal-Binaries_overlay")),
         )
 
         if output.returncode != 0:
