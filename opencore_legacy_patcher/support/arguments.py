@@ -108,7 +108,12 @@ class arguments:
         Start root volume unpatching
         """
         logging.info("Set System Volume unpatching")
-        sys_patch.PatchSysVolume(self.constants.custom_model or self.constants.computer.real_model, self.constants, None).start_unpatch()
+        sys_patch.PatchSysVolume(
+            self.constants.custom_model or self.constants.computer.real_model,
+            self.constants,
+            None,
+            unpatching=True,
+        ).start_unpatch()
 
 
     def _sys_patch_auto_handler(self) -> None:

@@ -49,6 +49,7 @@ class SysPatchStartFrame(wx.Frame):
         patch_selection: RootPatchSelection = None,
         expected_patch_selection: tuple[str, ...] = None,
         manual_kdk_candidate: KernelDebugKitCandidate = None,
+        revert_mode: bool = False,
     ):
         logging.info("Initializing Root Patching Frame")
 
@@ -61,6 +62,7 @@ class SysPatchStartFrame(wx.Frame):
         self.patch_selection = patch_selection
         self.expected_patch_selection = expected_patch_selection
         self.manual_kdk_candidate = manual_kdk_candidate
+        self.revert_mode = revert_mode
 
         super(SysPatchStartFrame, self).__init__(parent, title=title, size=(350, 200), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
         gui_support.GenerateMenubar(self, self.constants).generate()
@@ -71,7 +73,11 @@ class SysPatchStartFrame(wx.Frame):
             self.expected_patch_selection = ()
             return
 
-        applicability = HardwarePatchsetDetection(constants=self.constants)
+        applicability = HardwarePatchsetDetection(
+            constants=self.constants,
+            check_kdk_status=not self.revert_mode,
+            quiet_kdk_status=self.revert_mode,
+        )
         if self.patch_selection is None:
             bootstrap_state = RootPatchStateEvaluator(self.constants).evaluate(applicability.patches)
             self.patch_selection = RootPatchSelection.initialize(
@@ -81,6 +87,8 @@ class SysPatchStartFrame(wx.Frame):
         selected_detection = HardwarePatchsetDetection(
             constants=self.constants,
             patch_selection=self.patch_selection,
+            check_kdk_status=not self.revert_mode,
+            quiet_kdk_status=self.revert_mode,
         )
         self.patch_selection = self.patch_selection.constrained_to(selected_detection.applicable_patchsets)
         self.patches = selected_detection.device_properties
@@ -505,7 +513,12 @@ class SysPatchStartFrame(wx.Frame):
         logger = logging.getLogger()
         logger.addHandler(gui_support.ThreadHandler(self.text_box))
         try:
-            sys_patch.PatchSysVolume(self.constants.computer.real_model, self.constants, patches).start_unpatch()
+            sys_patch.PatchSysVolume(
+                self.constants.computer.real_model,
+                self.constants,
+                patches,
+                unpatching=True,
+            ).start_unpatch()
         except:
             logging.error("An internal error occurred while running the Root Patcher:\n")
             logging.error(traceback.format_exc())

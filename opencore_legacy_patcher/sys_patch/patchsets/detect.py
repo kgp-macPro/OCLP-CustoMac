@@ -101,6 +101,8 @@ class HardwarePatchsetDetection:
                  os_build:  str = None, os_version: str = None,
                  validation: bool = False, # Whether to run validation checks
                  patch_selection: RootPatchSelection = None,
+                 check_kdk_status: bool = True,
+                 quiet_kdk_status: bool = False,
                  ) -> None:
         self._constants = constants
 
@@ -110,6 +112,8 @@ class HardwarePatchsetDetection:
         self._os_version = os_version or self._constants.detected_os_version
         self._validation = validation
         self._patch_selection = patch_selection
+        self._check_kdk_status = check_kdk_status
+        self._quiet_kdk_status = quiet_kdk_status
 
         self._hardware_variants = [
             #intel_iron_lake.IntelIronLake,
@@ -306,7 +310,13 @@ class HardwarePatchsetDetection:
         """
         Check if Kernel Debug Kit is present
         """
-        return kdk_handler.KernelDebugKitObject(self._constants, self._os_build, self._os_version, passive=True).kdk_already_installed
+        return kdk_handler.KernelDebugKitObject(
+            self._constants,
+            self._os_build,
+            self._os_version,
+            passive=True,
+            quiet_installed_status=self._quiet_kdk_status,
+        ).kdk_already_installed
 
 
     def _is_cached_metallib_support_pkg_present(self) -> bool:
@@ -501,7 +511,7 @@ class HardwarePatchsetDetection:
         if self._validation is False:
             if requires_metallib_support_pkg is True:
                 missing_metallib_support_pkg = not self._is_cached_metallib_support_pkg_present()
-            if requires_kernel_debug_kit is True:
+            if requires_kernel_debug_kit is True and self._check_kdk_status is True:
                 missing_kernel_debug_kit = not self._is_cached_kernel_debug_kit_present()
 
         requires_network_connection = missing_metallib_support_pkg or missing_kernel_debug_kit

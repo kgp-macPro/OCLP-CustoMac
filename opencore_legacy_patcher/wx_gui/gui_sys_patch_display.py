@@ -143,7 +143,7 @@ class SysPatchDisplayFrame(wx.Frame):
         detection: HardwarePatchsetDetection = None
         def _fetch_patches(self) -> None:
             nonlocal patches, requested_patchset, detection
-            detection = HardwarePatchsetDetection(constants=self.constants)
+            detection = HardwarePatchsetDetection(constants=self.constants, quiet_kdk_status=True)
             patches = detection.device_properties
             requested_patchset = detection.patches
 
@@ -346,8 +346,13 @@ class SysPatchDisplayFrame(wx.Frame):
         return detection.applicable_patchsets
 
 
-    def _refresh_selection_state(self) -> None:
-        detection = HardwarePatchsetDetection(constants=self.constants, patch_selection=self.selection)
+    def _refresh_selection_state(self, check_kdk_status: bool = True) -> None:
+        detection = HardwarePatchsetDetection(
+            constants=self.constants,
+            patch_selection=self.selection,
+            check_kdk_status=check_kdk_status,
+            quiet_kdk_status=True,
+        )
         self.selection = self.selection.constrained_to(self._applicable_patchsets(detection))
         requested_patchset = detection.patches
         root_state = RootPatchStateEvaluator(self.constants).evaluate(requested_patchset)
@@ -539,7 +544,7 @@ class SysPatchDisplayFrame(wx.Frame):
 
 
     def on_revert_root_patching(self, event: wx.Event = None):
-        self._refresh_selection_state()
+        self._refresh_selection_state(check_kdk_status=False)
         if self.root_state.recovery_authorized is False:
             logging.error(self.root_state.reason)
             wx.MessageBox(self.root_state.reason, "Root Patch Reversion Unavailable", wx.OK | wx.ICON_WARNING)
@@ -555,6 +560,7 @@ class SysPatchDisplayFrame(wx.Frame):
             global_constants=self.constants,
             patches=self.current_detection.device_properties,
             patch_selection=self.selection,
+            revert_mode=True,
         )
         self.frame_modal.Hide()
         self.frame_modal.Destroy()

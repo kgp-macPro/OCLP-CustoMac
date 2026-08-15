@@ -60,6 +60,7 @@ class KernelDebugKitObject:
                  ignore_installed: bool = False, passive: bool = False,
                  check_backups_only: bool = False,
                  selected_candidate: KernelDebugKitCandidate = None,
+                 quiet_installed_status: bool = False,
         ) -> None:
 
         self.constants: constants.Constants = global_constants
@@ -68,6 +69,7 @@ class KernelDebugKitObject:
         self.host_version: str = host_version  # ex. 11.0.1
 
         self.passive: bool = passive  # Don't perform actions requiring elevated privileges
+        self.quiet_installed_status: bool = quiet_installed_status
 
         self.ignore_installed:      bool = ignore_installed   # If True, will ignore any installed KDKs and download the latest
         self.check_backups_only:    bool = check_backups_only # If True, will only check for KDK backups, not KDKs already installed
@@ -261,7 +263,8 @@ class KernelDebugKitObject:
 
         self.kdk_installed_path = self._local_kdk_installed()
         if self.kdk_installed_path:
-            logging.info(f"KDK already installed ({Path(self.kdk_installed_path).name}), skipping")
+            if self.quiet_installed_status is False:
+                logging.info(f"KDK already installed ({Path(self.kdk_installed_path).name}), skipping")
             self.kdk_already_installed = True
             self.success = True
             return
@@ -277,7 +280,8 @@ class KernelDebugKitObject:
             logging.info(f"Checking for KDKs loosely matching {loose_version}")
             self.kdk_installed_path = self._local_kdk_installed(match=loose_version, check_version=True)
             if self.kdk_installed_path:
-                logging.info(f"Found matching KDK: {Path(self.kdk_installed_path).name}")
+                if self.quiet_installed_status is False:
+                    logging.info(f"Found matching KDK: {Path(self.kdk_installed_path).name}")
                 self.kdk_already_installed = True
                 self.success = True
                 return
@@ -286,7 +290,8 @@ class KernelDebugKitObject:
             logging.info(f"Checking for KDKs matching {older_version}")
             self.kdk_installed_path = self._local_kdk_installed(match=older_version, check_version=True)
             if self.kdk_installed_path:
-                logging.info(f"Found matching KDK: {Path(self.kdk_installed_path).name}")
+                if self.quiet_installed_status is False:
+                    logging.info(f"Found matching KDK: {Path(self.kdk_installed_path).name}")
                 self.kdk_already_installed = True
                 self.success = True
                 return
@@ -350,7 +355,8 @@ class KernelDebugKitObject:
         # Check if this KDK is already installed
         self.kdk_installed_path = self._local_kdk_installed(match=self.kdk_url_build)
         if self.kdk_installed_path:
-            logging.info(f"KDK already installed ({Path(self.kdk_installed_path).name}), skipping")
+            if self.quiet_installed_status is False:
+                logging.info(f"KDK already installed ({Path(self.kdk_installed_path).name}), skipping")
             self.kdk_already_installed = True
             self.success = True
             return

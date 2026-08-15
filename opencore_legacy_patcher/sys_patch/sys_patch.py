@@ -98,6 +98,7 @@ class PatchSysVolume:
         patch_selection: RootPatchSelection = None,
         expected_patch_selection: tuple[str, ...] = None,
         manual_kdk_candidate: KernelDebugKitCandidate = None,
+        unpatching: bool = False,
     ) -> None:
         self.model = model
         self.constants: constants.Constants = global_constants
@@ -109,6 +110,7 @@ class PatchSysVolume:
         self.patch_selection = patch_selection
         self.expected_patch_selection = expected_patch_selection
         self.manual_kdk_candidate = manual_kdk_candidate
+        self.unpatching = unpatching
         self.installed_patch_metadata = None
         self.needs_kmutil_exemptions = False # For '/Library/Extensions' rebuilds
         self.kdk_path = None
@@ -117,7 +119,11 @@ class PatchSysVolume:
         # GUI will detect hardware patches before starting PatchSysVolume()
         # However the TUI will not, so allow for data to be passed in manually avoiding multiple calls
         if self.patch_selection is None:
-            applicability = HardwarePatchsetDetection(self.constants)
+            applicability = HardwarePatchsetDetection(
+                self.constants,
+                check_kdk_status=not self.unpatching,
+                quiet_kdk_status=self.unpatching,
+            )
             bootstrap_state = RootPatchStateEvaluator(self.constants).evaluate(applicability.patches)
             self.patch_selection = RootPatchSelection.initialize(
                 applicability.applicable_patchsets,
@@ -126,6 +132,8 @@ class PatchSysVolume:
         selected_detection = HardwarePatchsetDetection(
             self.constants,
             patch_selection=self.patch_selection,
+            check_kdk_status=not self.unpatching,
+            quiet_kdk_status=self.unpatching,
         )
         self.patch_selection = self.patch_selection.constrained_to(selected_detection.applicable_patchsets)
         if self.expected_patch_selection is None:
@@ -782,6 +790,8 @@ class PatchSysVolume:
         patchset_obj = HardwarePatchsetDetection(
             self.constants,
             patch_selection=getattr(self, "patch_selection", None),
+            check_kdk_status=False,
+            quiet_kdk_status=True,
         )
         root_state = RootPatchStateEvaluator(self.constants).evaluate(patchset_obj.patches)
         if root_state.recovery_authorized is False:

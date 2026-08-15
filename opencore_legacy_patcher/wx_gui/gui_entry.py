@@ -64,7 +64,12 @@ class EntryPoint:
 
         if "--gui_patch" in sys.argv or "--gui_unpatch" in sys.argv or start_patching is True :
             entry = gui_sys_patch_start.SysPatchStartFrame
-            patches = HardwarePatchsetDetection(constants=self.constants).device_properties
+            unpatching = "--gui_unpatch" in sys.argv
+            patches = HardwarePatchsetDetection(
+                constants=self.constants,
+                check_kdk_status=not unpatching,
+                quiet_kdk_status=unpatching,
+            ).device_properties
 
         logging.info(f"Entry point set: {entry.__name__}")
 
@@ -76,7 +81,10 @@ class EntryPoint:
             title=f"{self.constants.patcher_name} {self.constants.patcher_version}{' (Nightly)' if not self.constants.commit_info[0].startswith('refs/tags') else ''}",
             global_constants=self.constants,
             screen_location=None,
-            **({"patches": patches} if "--gui_patch" in sys.argv or "--gui_unpatch" in sys.argv or start_patching is True else {})
+            **({
+                "patches": patches,
+                "revert_mode": "--gui_unpatch" in sys.argv,
+            } if "--gui_patch" in sys.argv or "--gui_unpatch" in sys.argv or start_patching is True else {})
         )
 
         atexit.register(self.OnCloseFrame)
