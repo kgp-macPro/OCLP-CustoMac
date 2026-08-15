@@ -100,18 +100,36 @@ Phase 5 has two independent validation layers:
 
 OCLP does not download, install, enable, configure, or validate runtime attachment of AirportItlwm. Detection success is not proof of driver binding, and working AirportItlwm is not proof that the new OCLP detector was exercised.
 
-## Physical validation plan
+## Physical validation design
 
 ### Test A — shared payload independence
 
-With a Modern Wireless root patch installed while Broadcom hardware is present, power off, replace Broadcom with AX210, boot the known Intel EFI, and do not repatch solely because the card changed. Successful Intel runtime operation proves the root payload is hardware-independent; it does not prove direct Intel detection.
+With a Modern Wireless root patch installed while Broadcom hardware was present, KGP powered off, replaced Broadcom with AX210, booted the known Intel EFI, and did not repatch solely because the card changed. Successful Intel runtime operation proved the root payload is hardware-independent; it did not by itself prove direct Intel detection.
 
 ### Test B — direct Intel detection and patching
 
-Return safely to CLEAN, leave AX210 installed, launch the Phase-5 build, verify Modern Wi-Fi is applicable/default ON and the log reports `8086:2725`, then patch and reboot. Separately confirm AirportItlwm binding and runtime networking/AWDL behavior.
+KGP returned safely to the appropriate clean state, left AX210 installed, launched the Phase-5 build, observed direct Intel recognition and Modern Wi-Fi applicability, then patched and rebooted. Working Intel Wi-Fi and AirPlay after reboot separately confirmed external AirportItlwm binding and runtime behavior.
 
-An optional later reverse test may boot Broadcom against an Intel-originated shared root patch without repatching.
+An optional reverse test may later boot Broadcom against an Intel-originated shared root patch without repatching. It was not required for Phase-5 closure.
 
 ## Audit integrity
 
 No reference source was modified. No internet list or marketing-name list was used. No EFI, DeviceProperties, ACPI, DMAR, NVRAM, KDK, root volume, or live hardware state was changed during this audit.
+
+## Runtime confirmation and frozen decision
+
+KGP subsequently runtime-validated the generic detector with an Intel AX210. The captured IORegistry/device properties exposed:
+
+| Property | Captured value | Decoded identity |
+|---|---|---|
+| `vendor-id` | `<86 80 00 00>` | `0x8086` |
+| `device-id` | `<25 27 00 00>` | `0x2725` |
+| `IOName` | `pci8086,2725` | corroborates `8086:2725` |
+| `class-code` | `0x028000` | network controller / wireless class used by the probe |
+| model | `Intel AX210 Wi-Fi 6E 802.11ax + Bluetooth 5.3` | observed hardware description |
+
+The runtime node also used Apple-style wireless naming, including `AirPort Extreme` and `ARPT` where applicable. Those service/display names did not obscure the authentic numeric Intel PCI identity: `8086:2725` remained directly visible in the PCI properties and was corroborated by `IOName`.
+
+The eligibility decision therefore remains a numeric vendor/device decision. It is not an `AirPort` name, compatible-string, marketing-name, loaded-service, or fabricated Broadcom-identity predicate. The existing probe may use a parseable PCI `IOName` as one source of the resolved identity, but Phase 5 does not treat the string or Apple-style service naming itself as proof of supported Intel hardware.
+
+The final support decision is frozen at 87 AirportItlwm-personality-backed IDs. AX210 remains a generic member of that set; `0885`, `0886`, and `272B` remain excluded. Runtime success on AX210 does not narrow or expand the source-backed table.

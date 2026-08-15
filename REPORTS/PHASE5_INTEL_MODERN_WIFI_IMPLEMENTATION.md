@@ -99,7 +99,7 @@ The existing supported Broadcom chipset enums and PCI tables were not edited. Te
 - neither: not applicable;
 - Broadcom and Intel produce identical Modern Wireless payload dictionaries.
 
-BCM943602CDP remains the Phase-5A physical control device.
+BCM943602CDP was the independent Broadcom runtime-control device.
 
 ## Validation results
 
@@ -138,17 +138,25 @@ At implementation review:
 
 No Phase-2/3/4 root state, recovery, KDK, GUI, payload-image, nested-mount, audio, or Revert behavior was changed.
 
-## Runtime status
+## Runtime validation and frozen status
 
-Phase-5A artifacts:
+Runtime-tested Phase-5 artifact:
 
 - directory: `/Users/kgp/Desktop/OCLP/OCLP-v2.0-phase5-intel-modern-wifi`
 - primary package: `OpenCore-Patcher.pkg`
 - SHA-256: `dbd3bbd56e97dfd5f9edec4b5f662ae8750326e4901698c1b13d771083f458e1`
 - uninstaller SHA-256: `88420b7ed293fb84ed8d1e6ff0f0cf1056541ae91252f0770a612f022218242d`
 - AutoPkg assets SHA-256: `8bf175f2ff495a9177536a7800bfa631ca91f93ac487b8a91f9e35c5a559f213`
-- status: statically validated; not installed or runtime-tested by Codex
+- status: statically validated by Codex and runtime validated by KGP
 
-The first physical validation is the BCM943602CDP Phase-5A control. It must establish that adding the Intel predicate caused no Broadcom or GUI/KDK side effect. Phase-5B then records Test A (shared root payload across a Broadcom-to-Intel hardware swap without repatching) separately from Test B (direct Intel detection/applicability, Intel-originated root patching, and subsequent external-AirportItlwm runtime binding).
+The physical validation used three deliberately separate evidence steps:
 
-Phase-5B AX210 direct-detection and AirportItlwm runtime validation: **not performed by Codex**.
+1. **Broadcom regression control:** BCM943602CDP root patching succeeded with the Intel detector present. After reboot, AppleHDA, Broadcom Wi-Fi, and the tested AWDL/Continuity functions worked flawlessly. Sidecar is excluded from that result.
+2. **Intel Test A — shared root-payload independence:** KGP powered off, replaced the Broadcom adapter with AX210, booted the external Intel EFI/AirportItlwm, and did not repatch. Intel Wi-Fi and AppleHDA worked immediately, proving that the existing root payload is shared across the two hardware paths.
+3. **Intel Test B — direct detection and patching:** with physical `8086:2725` AX210 installed and a clean root-patch state, OCLP directly recognized Intel Modern Wireless, made Modern Wi-Fi applicable, and completed root patching. After reboot, AppleHDA, Intel Wi-Fi, and AirPlay worked flawlessly. This separately proves the detector/applicability layer and the external AirportItlwm runtime-binding layer.
+
+The captured AX210 properties were `vendor-id <86 80 00 00>`, `device-id <25 27 00 00>`, `IOName pci8086,2725`, and class code `0x028000`. Apple-style `AirPort Extreme`/`ARPT` naming coexisted with the authentic Intel PCI identity.
+
+Hack-to-MBP-M1 Screen Mirroring worked once but was otherwise unreliable. It is not classified as a Phase-5 detection failure or as validated Intel functionality. FeatureUnlock/Tahoe Screen Mirroring is a separate research area and Phase 5 did not modify it. Other Continuity/AWDL services not positively exercised in this session are not claimed.
+
+Phase 5 — Generic Intel Modern Wi-Fi Integration is **COMPLETE — RUNTIME VALIDATED — FROZEN**. The earlier Phase-5A/Phase-5B labels describe test sequencing only; they are not separate official product phases.
