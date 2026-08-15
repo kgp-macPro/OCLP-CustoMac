@@ -2,7 +2,9 @@
 
 ## Result
 
-Phase 4 changes only the filesystem used to create `payloads.dmg`: HFS+ is replaced by APFS. The image filename, 32,000 MiB logical size, UDZO format, encryption/passphrase contract, volume label, layout, source directory, runtime mount flags, and logical payload tree are unchanged. `Universal-Binaries.dmg` remains the original APFS image.
+Phase 4 changes the filesystem used to create `payloads.dmg`: HFS+ is replaced by APFS. The image filename, 32,000 MiB logical size, UDZO format, encryption/passphrase contract, volume label, layout, source directory, and logical payload tree are unchanged. `Universal-Binaries.dmg` remains the original APFS image.
+
+The first packaged runtime test exposed a macOS mount-hierarchy constraint that the pre-build validation had missed: an APFS `Universal-Binaries.dmg` could not be attached at a nested mountpoint inside the new APFS `payloads.dmg` shadow mount. The final runtime correction retains both read-only images and their writable shadows, mounts the inner image at a sibling host temporary mountpoint, exposes it at OCLP's unchanged logical payload path through a symlink in the outer shadow, and supplies the fixed image password via `hdiutil -stdinpass`. No privileged mount helper is used.
 
 Phase 2, Phase 3B, and Phase 3C remained frozen. No root patch, revert, install, KDK operation, `bless`, EFI/NVRAM write, reboot, or live-root mutation was performed.
 
@@ -10,7 +12,8 @@ Phase 2, Phase 3B, and Phase 3C remained frozen. No root patch, revert, install,
 
 - Phase-2/Phase-3 runtime-validated implementation: `62e0b1c0413eb900bda69955030dd5bee28219b6`
 - Phase-2/Phase-3 documentation HEAD at Phase-4 start: `e4d4793bc7fd2d0e5994e70a5f104f5671bc30bb`
-- Phase-4 implementation commit and clean artifact source HEAD: `b269e61b6c3e88c2b24c85eb09ddd884ca980580`
+- Phase-4 APFS conversion commit: `b269e61b6c3e88c2b24c85eb09ddd884ca980580`
+- Phase-4 runtime-mount correction commit and clean final artifact source HEAD: `0b6b25161936c672d21a7af82796ff9b80c9d22e`
 - Documentation HEAD: the docs-only commit containing this report; its exact SHA is recorded in the external completion report because a commit cannot embed its own final SHA.
 
 The previously runtime-validated Phase-2/3 package was not changed:
@@ -39,7 +42,7 @@ The runtime audit found filename and explicit mountpoint dependencies, but no HF
 - `opencore_legacy_patcher/sys_patch/utilities/dmg_mount.py::_mount_universal_binaries_dmg()` mounts the inner image with the existing explicit-mountpoint model.
 - No source location selects a mountpoint from the HFS+ filesystem type or relies on HFS+-only APIs, catalog behavior, or case semantics.
 
-The already-APFS image path and the exact local Plus/Mod references both demonstrated that native APFS images are compatible with the established explicit mount workflow.
+The audit correctly established that each image is individually compatible with an explicit APFS mountpoint. It did not prove the nested APFS-inside-APFS mount hierarchy used at runtime. That distinction caused the first runtime candidate to fail and is corrected below.
 
 ## Implementation
 
@@ -68,6 +71,65 @@ Tracked functional files changed:
 
 - `ci_tooling/build_modules/disk_images.py`
 - `tests/test_phase4_disk_images.py`
+
+## Runtime failure and final mount correction
+
+The installed first Phase-4 candidate reached the unchanged inherited call:
+
+```text
+hdiutil attach -noverify Universal-Binaries.dmg
+    -mountpoint <temporary>/payloads/Universal-Binaries
+    -nobrowse
+    -shadow <temporary>/payloads/Universal-Binaries_overlay
+    -passphrase password
+```
+
+and failed with `Permission denied`. A direct source comparison proved there was no runtime-helper delta between the Phase-2/3 golden implementation `62e0b1c...` and the initial Phase-4 implementation `b269e61...`; the only functional source change was the outer image's `HFS+` to `APFS` creation token. Mechanical tests then isolated the filesystem boundary:
+
+- the unchanged helper succeeded when the outer image was HFS+;
+- it failed when the outer image was APFS, including when the nested directory was pre-created;
+- replacing `-passphrase` with `-stdinpass` did not make the nested APFS mount succeed;
+- the unchanged frozen `Universal-Binaries.dmg` mounted successfully at a normal host temporary mountpoint.
+
+The failure was therefore caused by attempting to use a mountpoint inside another APFS disk-image volume, not by the image bytes or its passphrase.
+
+Final implementation commit:
+
+```text
+0b6b25161936c672d21a7af82796ff9b80c9d22e
+fix: mount APFS payload resources noninteractively
+```
+
+Final runtime files:
+
+- `opencore_legacy_patcher/support/disk_image.py` centralizes protected-image attachment with `-stdinpass` and supplies the eight-byte fixed image password through subprocess stdin;
+- `opencore_legacy_patcher/support/reroute_payloads.py` uses that helper for `payloads.dmg`;
+- `opencore_legacy_patcher/sys_patch/utilities/dmg_mount.py` physically mounts `Universal-Binaries.dmg` beside the outer mount on the host temporary filesystem and creates the expected `payloads/Universal-Binaries` logical symlink in the writable outer shadow;
+- `opencore_legacy_patcher/support/validation.py` uses the same authenticated helper;
+- `tests/test_phase4_runtime_disk_images.py` covers both images, forbids deprecated `-passphrase`, proves stdin-only authentication, and protects the host-sibling/logical-link contract.
+
+The existing `-noverify`, `-nobrowse`, explicit mountpoint, writable shadow, and cleanup behavior remains. The existing cleanup loop sees both image shadow paths under the same operation temporary directory and detaches `Universal-Binaries.dmg` before `payloads.dmg`.
+
+## OCLP-Mod / OCLP-Plus comparison checkpoint
+
+The exact already-local OCLP-Mod 3.1.9 (`3b15c888...`) and OCLP-Plus 3.2.2 (`afc5021e...`) sources were inspected read-only before finalizing the runtime candidate.
+
+| Property | KGP final Phase 4 | OCLP-Mod 3.1.9 | OCLP-Plus 3.2.2 |
+|---|---|---|---|
+| Outer image filesystem | APFS | APFS | APFS |
+| Outer mountpoint | host temp `payloads` | host temp `payloads` | host temp `payloads` |
+| Inner mountpoint | sibling host temp; logical symlink under `payloads` | nested under APFS `payloads` | nested under APFS `payloads` |
+| Privileged `hdiutil` | no | yes, outer and inner | yes, outer and inner |
+| Shadow placement | both on host temp | outer host temp; inner inside outer APFS mount | same as Mod |
+| Passphrase | `-stdinpass`, stdin bytes | deprecated `-passphrase password` argv | same as Mod |
+| Symlink indirection | yes | no | no |
+| Cleanup order | Universal, then payloads | internal, Universal, payloads | internal, Universal, payloads |
+
+Source history makes their mechanism explicit. Mod commit `2862c2e35202a3ed288e58b3ca69e6b08c0307a5` changed both outer and inner calls from `subprocess.run` to `run_as_root` under the message `High privileged for macOS 26.4B1.` Plus commits `59119350c40507a3341d0778d024625756daedbd` and `b841a3316b2197d8b5b5e11fb4e411e2c7616935` made the equivalent changes. Their subsequent APFS creation commits changed only the filesystem token.
+
+The exact runtime sites are `oclp_mod/support/reroute_payloads.py::RoutePayloadDiskImage._setup_tmp_disk_image()` and `oclp_mod/sys_patch/utilities/dmg_mount.py::PatcherSupportPkgMount._mount_universal_binaries_dmg()` for Mod, with the corresponding `oclp_plus/...` files and classes for Plus. Both construct `hdiutil attach -noverify <image> -mountpoint <path> -nobrowse -shadow <path> -passphrase password`, then pass that argv through `subprocess_wrapper.run_as_root()`. The outer path is `<temp>/payloads`; the inner path and inner shadow remain `<temp>/payloads/Universal-Binaries[_overlay]`. Neither changes the hierarchy, shadow model, nor uses a symlink. `RoutePayloadDiskImage._unmount_active_dmgs()` obtains `hdiutil info -plist` and force-detaches matching internal, Universal, then payload images by device entry; its temporary shadow ownership check keeps cleanup scoped to the operation. Both forks' separate `support/validation.py::_validate_sys_patch()` remains an unprivileged nested mount used for source/CI validation rather than the root-patcher runtime path.
+
+Both forks' `run_as_root` prepends an installed setuid privileged helper. After signer/certificate checks, that helper accepts an arbitrary executable path and arguments and launches it as root through `NSTask`. Their own documentation warns that source/debug builds disabling signer checks allow any application to execute commands as root. KGP's reproducible app is deliberately ad hoc signed with no Team ID, so the release signer check cannot authenticate it; adopting debug mode would add exactly the general-purpose elevation exposure previously rejected. The unprivileged sibling mount is therefore the smaller and safer KGP solution.
 
 ## Authoritative logical payload source
 
@@ -107,12 +169,12 @@ For both images:
 - the volume remained `OpenCore Patcher Resources (Base)`;
 - logical capacity remained 32,000 MiB;
 - normal read-only mounting and unmounting succeeded;
-- the exact runtime-style explicit mountpoint, passphrase, `-noverify`, `-nobrowse`, and shadow-file mount succeeded;
+- each image individually succeeded at a host temporary explicit mountpoint with `-noverify`, `-nobrowse`, noninteractive passphrase input, and a shadow file;
 - the shadow mount supplied the expected writable overlay semantics without changing the image;
 - representative application resources were readable;
 - all validation mounts detached cleanly, leaving no stale project mountpoint.
 
-The final built and package-expanded applications embed the selected APFS pass-1 image at the unchanged `Contents/Resources/payloads.dmg` path.
+The final built and package-expanded applications embed the selected APFS pass-1 image at the unchanged `Contents/Resources/payloads.dmg` path. The final packaged-runtime test additionally exercised the actual OCLP helper flow: the outer image mounted at `<temp>/payloads`, the inner image mounted at sibling `<temp>/Universal-Binaries`, and the expected `<temp>/payloads/Universal-Binaries` path resolved through the shadow-layer symlink.
 
 `Universal-Binaries.dmg` remained APFS and byte-identical at SHA-256 `3659ae0ebadc1062252bbeeb7fe75dce292b5b9d599681c6dfa3dc4430bbc6a4` in the source inputs, both clean app builds, and both package-expanded applications.
 
@@ -150,7 +212,7 @@ Both builds used separate copies of the established locked environment:
 - `SOURCE_DATE_EPOCH=1786750336`
 - no dependency resolution or package download occurred
 
-Validation results:
+Initial APFS-container validation results at `b269e61...`:
 
 - focused Phase-4 disk-image test: 1 passed;
 - complete automated suite: 179 passed, 0 failed;
@@ -162,6 +224,21 @@ Validation results:
 - embedded provenance: exact full SHA, canonical commit URL, commit date, and branch all matched `b269e61b6c3e88c2b24c85eb09ddd884ca980580`;
 - packaged-app parity: exact content/symlink/mode aggregate matched the corresponding validated app;
 - the installer packages intentionally have no installer signing identity; no signing identity was required or supplied.
+
+Final runtime-fix validation at clean implementation HEAD `0b6b251...` used the same locked environment and fixed image inputs:
+
+- focused Phase-4 runtime/image suite: 4 passed, 0 failed;
+- complete automated suite: 182 passed, 0 failed;
+- inherited non-failing `ResourceWarning` in `efi_builder/support.py:130` remains;
+- `compileall`: passed;
+- `git diff --check`: passed;
+- source and clean build clone: clean;
+- embedded `Github` provenance: SHA `0b6b25161936c672d21a7af82796ff9b80c9d22e`, branch `refs/heads/experiment/amfipassbeta-v2.0`, commit date `2026-08-15T02:23:59+02:00`, and canonical commit URL;
+- built and package-expanded apps: strict/deep ad-hoc verification passed, `TeamIdentifier=not set`;
+- packaged-app parity: rsync checksum comparison reported no changes; both trees contain 110 regular files, 33 symlinks, and 26 directories; symlink target manifests are identical;
+- packaged `payloads.dmg`: APFS and valid, SHA-256 `082de073e0d103d7bd4b47852007f2b6ab360eda5b4737a089cf3b34a3910f91`;
+- packaged `Universal-Binaries.dmg`: APFS and valid, unchanged SHA-256 `3659ae0ebadc1062252bbeeb7fe75dce292b5b9d599681c6dfa3dc4430bbc6a4`;
+- exact runtime helper against the package-expanded app: both mounts succeeded, both shadow volumes were writable, expected paths were readable, both commands used `-stdinpass` with the password absent from argv, detach succeeded, and no project mount remained.
 
 ## Signing and Keychain isolation
 
@@ -182,14 +259,16 @@ The replacement validation is noninteractive with respect to Keychain:
 - both mounted as APFS with their expected labels, exposed readable contents, and detached cleanly;
 - no Phase-4 project disk image remained mounted after validation.
 
-An exhaustive source/workflow search found that the repository paths were already noninteractive:
+The initial source/workflow search found fixed-password repository paths, but they still used deprecated `-passphrase` argv authentication:
 
 - `disk_images.py` creates `payloads.dmg` with `-passphrase password -encryption`;
-- `reroute_payloads.py` opens `payloads.dmg` with the fixed passphrase;
-- `sys_patch/utilities/dmg_mount.py` opens `Universal-Binaries.dmg` with the fixed passphrase;
-- `support/validation.py` also opens `Universal-Binaries.dmg` with the fixed passphrase;
+- `reroute_payloads.py` opened `payloads.dmg` with the fixed passphrase;
+- `sys_patch/utilities/dmg_mount.py` opened `Universal-Binaries.dmg` with the fixed passphrase;
+- `support/validation.py` also opened `Universal-Binaries.dmg` with the fixed passphrase;
 - the application build embeds both DMGs as ordinary resources and does not open them;
 - no repository helper runs `imageinfo` or an unqualified `verify` on either image.
+
+The final runtime correction routes all three protected-image attach call sites through `support/disk_image.py`, using `-stdinpass` and subprocess stdin. The fixed password is not present in process argv. Both packaged images then completed `imageinfo`, checksum verification, and actual runtime-helper mounting without a GUI authentication prompt or Keychain operation.
 
 The signing path was independently proven unrelated to the prompts:
 
@@ -205,7 +284,7 @@ No `security` command, Keychain import/unlock/authorization, named `codesign` id
 
 ## Phase-2/Phase-3 freeze proof
 
-The Phase-4 implementation commit changes no Phase-2/Phase-3 runtime source. From the runtime-validated implementation through Phase 4, the only non-documentation functional diff is the disk-image filesystem token plus its new test.
+Phase 4 changes no Phase-2/Phase-3 patching, recovery, selection, KDK, KC, or hardware policy. Its functional diff is confined to the disk-image filesystem token, protected-resource mount compatibility/authentication, and their tests.
 
 Frozen checks include:
 
@@ -217,7 +296,7 @@ Frozen checks include:
 
 No Phase-4 source change touched state classification, Patch/Revert authorization, SIP/can-unpatch, lifecycle recovery, root-patch selection, installed metadata, KDK resolution/selection/exclusion/download/merge, KC or snapshot behavior, wireless/audio detection or dictionaries, Intel/Broadcom PCI logic, EFI, ACPI, DMAR, DeviceProperties, or AppleVTD.
 
-## Final artifact
+## Initial runtime candidate (superseded)
 
 Artifact directory:
 
@@ -239,7 +318,31 @@ Matching artifacts copied from the same build:
 - `BUILD_INFO.txt`
 - `SHA256SUMS.txt`
 
-All exported checksums passed after copying. This is a disposable Phase-4 runtime candidate and has not been installed or runtime tested.
+All exported checksums passed after copying. This candidate is retained as failure evidence and must not be used: its installed runtime test exposed the nested APFS mountpoint failure described above.
+
+## Final runtime-fix artifact
+
+Artifact directory:
+
+```text
+/Users/kgp/Desktop/OCLP/OCLP-v2.0-phase4-apfs-runtime-fix
+```
+
+Validated primary package:
+
+```text
+/Users/kgp/Desktop/OCLP/OCLP-v2.0-phase4-apfs-runtime-fix/OpenCore-Patcher.pkg
+SHA-256: 3c3a01bbaacfb3a65ba02650ee1e23a771bc8dfe29afe3bee3f7288f439205c9
+```
+
+Matching artifacts copied from the same clean build:
+
+- `OpenCore-Patcher-Uninstaller.pkg`: `3fcbb53b06a12e44df55ee0acc424e4f4c6982abf0ea826dbcfe341d504d6e65`
+- `AutoPkg-Assets.pkg`: `2c50ea10e2dad455dd07e2103f6453bef5644cda2b4eb49d0a9d08524fb4dd2b`
+- `BUILD_INFO.txt`
+- `SHA256SUMS.txt`
+
+All exported checksums passed after copying. This new runtime-fix candidate has not been installed or root-patch tested by Codex.
 
 ## Known limitation
 
