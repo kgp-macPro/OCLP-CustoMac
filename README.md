@@ -1,196 +1,370 @@
 <div align="center">
-<img src="docs/images/OC-Patcher.png" alt="OpenCore Patcher Logo" width="256" />
-<h1>OCLP 3.0.0 Nightly – amfipassbeta Edition for macOS Tahoe</h1>
+<img src="docs/images/OC-Patcher.png" alt="OCLP-CustoMac" width="256" />
+
+# OCLP-CustoMac
+
+### Focused Modern Wi-Fi and AppleHDA root patching for macOS
 </div>
 
 ---
 
-## Recommended Setup
+OCLP-CustoMac is an independent, focused OpenCore Legacy Patcher derivative developed primarily for advanced Custom Mac and Hackintosh systems. Its first public release is fully runtime validated on **macOS Tahoe 26.x / Darwin 25**.
 
-This repository provides the **recommended way** to run the preserved OCLP 3.0.0 Tahoe patchset using:
+The registered root-patch families are deliberately limited to:
 
-**AMFIPass.kext + boot argument `-amfipassbeta`**
+- **Modern Wireless**
+- **Modern Audio / AppleHDA**
 
-Unlike the original setup, this variant **does not require `amfi=0x80`**, avoiding application compatibility issues.
+No graphics, Non-Metal, or unrelated inherited OCLP root-patch family is registered. The inherited OCLP source infrastructure remains present, but those other detector families cannot enter OCLP-CustoMac's final root-patch plan. The same narrow registry applies if OCLP-CustoMac is executed on genuine Apple Intel hardware.
 
-For full documentation, compatibility details, proper setup and EFI configuration, see:
+## Why OCLP-CustoMac Exists
 
-**InsanelyMac thread (primary reference):**  
-https://www.insanelymac.com/forum/topic/362042-experimental-fork-of-oclp-300-nightly-%E2%80%93-modern-wi-fi-awdl-and-applehda-fully-working-under-tahoe/
+OCLP-CustoMac was not created merely to place another OCLP patcher on the market, and it is not intended to replace original Dortania OCLP, OCLP-Mod, or OCLP-Plus.
 
----
+The project grew from long-term maintenance and real-system validation of the preserved OCLP 3.0.0 Nightly Tahoe environment and its amfipassbeta Edition. Continued Tahoe development exposed requirements that no longer fit cleanly within preservation-only changes:
 
-## Overview
+- independent Modern Wi-Fi and Modern Audio selection;
+- safer recovery from installed, pending, and failed root-patch states;
+- optional manual KDK selection and KDK eligibility safeguards;
+- direct Intel hardware detection;
+- APFS patch-resource packaging;
+- locked, reproducible, and independently validated builds.
 
-This repository provides a reproducible and adapted version of the final OCLP 3.0.0 Nightly snapshot (Dec 24, 2025) by lzhoang2801, configured for macOS Tahoe 26.x.
+OCLP-Mod and OCLP-Plus were important comparative reference implementations during the audits. OCLP-CustoMac is **not** a copy-and-paste combination of those forks. Comparable concepts were audited against the preserved OCLP 3.0.0 Nightly baseline, then independently reimplemented, adapted, refined, or deliberately rejected according to this project's narrower scope and security boundaries.
 
-The original snapshot is no longer directly usable on Tahoe due to incomplete PatcherSupportPkg resources.
+Concrete examples include:
 
-This repository restores the functionality required for modern AppleHDA, Wi-Fi and AWDL support by using a compatible PatcherSupportPkg providing complete Universal-Binaries and enabling compatibility with AMFIPass.kext and `-amfipassbeta`.
+- **Intel detection:** reconstructed from the current AirportItlwm matcher and current Intel BZ/SC transport definitions, then cross-checked against OCLP-Mod rather than copied from its table.
+- **APFS resources:** the APFS container concept was adopted, but the privileged nested-mount model found in comparative forks was rejected. OCLP-CustoMac uses an unprivileged host-side sibling mount with logical-path compatibility.
+- **Root-patch recovery:** independently redesigned following real failed/pending root-state testing.
+- **Manual KDK and patch selection:** designed for OCLP-CustoMac's operation-scoped selection and fail-closed resolver architecture.
 
-No original Tahoe root patch logic has been modified.
+The result has a different scope, different implementation decisions, and its own static and physical runtime validation record. This is not a claim that it is superior to other OCLP derivatives.
 
----
+## Three Established Tahoe Approaches
 
-## Scope Clarification
+OCLP-CustoMac does not obsolete or withdraw the two earlier KGP Tahoe configurations. All three approaches remain intentionally available.
 
-This repository is intended exclusively for advanced Hackintosh systems running macOS Tahoe 26.x.
+### 1. OCLP 3.0.0 Nightly – Preserved Reference Edition
 
-It is NOT a general unsupported-Mac patching project.
+- conservative reference environment closest to the earlier working lzhoang2801 OCLP 3.0.0 Nightly Tahoe state;
+- uses the earlier working lzhoang2801 PatcherSupportPkg containing Modern Wireless resources and AppleHDA;
+- retains the historical `amfi=0x80` and `ipc_control_port_options=0` AMFI path;
+- preserved for users who value maximum proximity to the original Nightly architecture.
 
-No additional graphics acceleration patches or unsupported-Mac root patch frameworks are included.
+### 2. OCLP 3.0.0 Nightly – amfipassbeta Edition
 
-This repository intentionally remains as close as possible to the original OCLP 3.0.0 Nightly Tahoe baseline released by the OCLP developers and later preserved by lzhoang2801.
+- conservative and extensively tested on real systems over many months;
+- remains close to the preserved Nightly architecture;
+- uses `AMFIPass.kext + -amfipassbeta`;
+- its documented Intel configuration uses a Broadcom `IOName` spoof with AirportItlwm;
+- remains fully available, and satisfied users do not need to migrate.
 
-The fork only enables and preserves the original Tahoe patch functionality already implemented by the OCLP developers.
+### 3. OCLP-CustoMac
 
----
+- further-developed focused branch with direct Intel detection;
+- does not require a Broadcom `IOName` spoof for Intel detection;
+- selectable Modern Wi-Fi and Modern Audio;
+- automatic and optional manual KDK selection;
+- strengthened root-patch recovery;
+- APFS internal resources;
+- reproducible, validated builds.
 
-## Functionality
+## Public Support Scope
 
-The following components are currently confirmed working with this setup:
+| Environment | Status |
+|---|---|
+| Custom Mac / Hackintosh, macOS Tahoe 26.x / Darwin 25 | **Fully runtime validated public target** |
+| macOS Sequoia / Darwin 24 Modern Wireless | Coherent inherited path and complete resources; not runtime validated or advertised as supported |
+| macOS Sonoma / Darwin 23 Modern Wireless | Coherent inherited path and complete resources; not runtime validated or advertised as supported |
+| Genuine Apple Intel hardware | Not artificially blocked; unverified and not advertised as supported |
+| Darwin 26 / Golden Gate | Outside the current root-patch support scope |
 
-- modern audio (AppleHDA)
-- modern Wi-Fi (Broadcom and supported Intel chipsets)
+Modern Audio is native/not applicable on Sequoia. Source reachability is not a support promise: Tahoe/Darwin 25 is the first-release support claim.
 
-AWDL stack:
-- AirDrop (bidirectional)
-- AirPlay (bidirectional)
-- Screen Mirroring (bidirectional)
-- Personal Hotspot
-- Continuity Camera
+## Root Patch Selection
 
-Continuity:
-- Handoff (e.g. Mail, Notes, Safari)
+The Root Patch Selection screen presents applicable controls for:
 
-Sidecar:
-- currently not functional
+```text
+[✓] Modern Wi-Fi
+[✓] Modern Audio
+[ ] Manually select Kernel Debug Kit
+```
 
----
+Applicable Modern Wi-Fi and Modern Audio options default ON on a CLEAN root. Supported selections are:
 
-## Requirements
+- Wi-Fi + Audio;
+- Wi-Fi only;
+- Audio only.
 
-- Boot argument:  
-  `-amfipassbeta`
+With both patch options OFF, **Start Root Patching** is disabled and an explicitly forced empty operation is rejected before KDK, root, kernel-cache, snapshot, or metadata work.
 
-- A suitable **Kernel Debug Kit (KDK)** is required for OCLP root patching
+When a known root patch is installed, its applied selection is shown read-only. To change it:
 
-For compatibility details (macOS versions and KDK handling), see the InsanelyMac thread or its mirror on tonymacx86.
+```text
+Revert Root Patches
+    -> reboot into a CLEAN/sealed root
+    -> choose the new configuration
+    -> root patch again
+```
 
----
+Selection affects root payloads only. OCLP-CustoMac does not mutate EFI, DeviceProperties, ACPI, DMAR, NVRAM, or hardware identity as a side effect of Modern Wi-Fi selection.
 
-## PatcherSupportPkg Dependency
+## Intel Wi-Fi Device Support
 
-This repository relies on:
+OCLP-CustoMac directly recognizes:
+
+- **87 Regular** Intel PCI IDs from the current authoritative AirportItlwm matcher;
+- **9 Experimental / Development** Intel BZ/SC transport IDs;
+- **96 total** Intel transport IDs.
+
+[Complete Intel Wi-Fi Device Support List](Documentation/Intel-WiFi-Device-Support.md)
+
+Experimental detection makes the shared Modern Wi-Fi root-patch path applicable. It does **not** guarantee stock AirportItlwm runtime support, and a compatible experimental or modified driver may be required. BZ/SC PCI transport IDs do not necessarily identify a one-to-one marketing SKU: `272B` covers discrete BE200/BE202-family variants differentiated through further subsystem/RF identity, while integrated BE201/BE211/BE213 differentiation may likewise require information beyond the base PCI transport ID.
+
+CNVio, CNVio2, and CNVio3 are not exclusion criteria. The known legacy Centrino Wireless-N/WiMAX 6150 IDs `0885` and `0886` remain deliberately excluded.
+
+### Direct Intel detection—no Broadcom IOName spoof required
+
+Unlike the amfipassbeta Edition, OCLP-CustoMac detects supported Intel hardware from its authentic PCI vendor/device identity and does not require a Broadcom `IOName` spoof for detection.
+
+Intel detection and runtime binding are separate layers:
+
+1. OCLP-CustoMac detects the Intel transport and makes Modern Wi-Fi applicable.
+2. The user's external EFI and AirportItlwm bind the physical device at boot.
+
+OCLP-CustoMac does **not**:
+
+- provide, install, or download AirportItlwm;
+- modify the user's EFI or `Kernel/Add`;
+- inject Broadcom `IOName` or Intel spoofing;
+- modify DeviceProperties, ACPI, DMAR, or NVRAM.
+
+Do not blindly remove an existing historical EFI property merely because OCLP-CustoMac no longer needs it for detection. It may serve another system-specific purpose; review the migration context first.
+
+### Validated Intel runtime status
+
+With Intel AX210 (`8086:2725`) and an external AirportItlwm EFI, KGP validated:
+
+- Wi-Fi — working;
+- AppleHDA — working;
+- AirPlay — working;
+- normal Apple Screen Mirroring path — working.
+
+Current AirportItlwm does not provide a complete native AWDL control/data path. OCLP-CustoMac therefore does not claim reliable Intel support for bidirectional AirDrop, Personal Hotspot, or Continuity Camera. Those limitations belong to the external runtime driver, not to OCLP-CustoMac's PCI detection or shared Modern Wireless root patch.
+
+Normal Screen Mirroring works on the validated Broadcom and Intel paths. Some Hackintosh systems independently reproduce an outgoing Hackintosh-to-Apple-receiver black-screen issue; it is separate from OCLP-CustoMac. FeatureUnlock-Tahoe is a validated fallback for affected Broadcom setups, while Intel plus FeatureUnlock-Tahoe remains less reliable and under separate development. Systems with normally working Screen Mirroring do not need FeatureUnlock-Tahoe.
+
+## Kernel Debug Kit Handling
+
+Modern Wi-Fi alone does not require a KDK solely because Wi-Fi is selected. Modern Audio / AppleHDA uses a KDK where its applicable path requires one. Requirement aggregation remains authoritative for any future selected patch that independently requires a KDK.
+
+### Automatic mode
+
+Automatic mode preserves inherited OCLP behavior: exact match when available, otherwise the existing closest-match choice among permitted candidates.
+
+### Manual mode
+
+When the final selected patch plan requires a KDK, the optional **Manually select Kernel Debug Kit** control becomes available. The dialog shows eligible official candidates, version/build, installed status, exact/closest status where applicable, and the candidate OCLP would choose automatically.
+
+The manual selection is operation-scoped and confirmed before use. The exact chosen identity is handed to the normal OCLP download/install/merge/patch workflow. Cancellation starts no KDK or root operation, and a failed manual choice never falls back silently into AUTO.
+
+### Darwin-26 KDK protection
+
+KDK eligibility uses ProductBuildVersion/build family—not the macOS marketing version:
+
+```text
+macOS 26.6.2 / KDK build 25G82  -> permitted
+KDK build 26A5368g              -> rejected
+```
+
+All KDK candidates whose build identity begins with `26` are excluded. Darwin 25 and older permitted candidates retain inherited exact/closest ranking. Darwin 26 itself is outside the current root-patch scope.
+
+## Root Patch Recovery
+
+OCLP-CustoMac separates authorization to apply a new patch from authorization to recover a root:
+
+- a clean, patch-authorized root does not need Revert;
+- a patched, pending, failed, or otherwise non-clean root that blocks new patching exposes **Revert Root Patches** as the recovery path.
+
+Recovery is not artificially restricted by Git commit, application build, project/fork identity, patchset identity, KDK identity, trusted installed-selection metadata, or lifecycle-record presence.
+
+True safeguards remain enforced at click and operation time, including SIP/`can_unpatch`, target-root validation, state revalidation, and the standard last-sealed-snapshot rollback. Failed and pending patch operations retain a recovery path instead of creating a Patch-off/Revert-off dead end.
+
+## Validated Tahoe Configuration
+
+The KGP runtime-validation baseline used:
+
+```text
+AMFIPass                1.4.1
+boot argument           -amfipassbeta
+SecureBootModel         Disabled
+csr-active-config       03080000
+DisableIoMapper         true
+```
+
+`amfi=0x80` is not required for this configuration. `-amfipassbeta` is **not deprecated**.
+
+This is the validated project baseline, not an instruction to rewrite an existing EFI without reviewing the complete hardware and security context.
+
+## Component / Build Baseline
+
+| Component | Version |
+|---|---:|
+| OpenCorePkg | 1.0.7 |
+| Lilu | 1.7.2 |
+| WhateverGreen | 1.7.0 |
+| RestrictEvents | 1.1.6 |
+| AirportBrcmFixup | 2.2.0 |
+| BlueToolFixup | 2.7.2 |
+| NVMeFix | 1.1.3 |
+| CPUFriend | 1.3.0 |
+| CryptexFixup | 1.0.5 |
+| DebugEnhancer | 1.1.1 |
+| AppleALC | 1.9.7 |
+| FeatureUnlock | 1.1.8 (stock baseline) |
+| AMFIPass | **1.4.1 (intentionally pinned)** |
+
+These versions describe the OCLP-CustoMac build/component baseline. OCLP-CustoMac does not automatically update or rewrite the user's EFI.
+
+## Installation and Package Security
+
+OCLP-CustoMac packages are ad-hoc signed and are not distributed with Apple Developer ID signing or Apple notarization.
+
+First verify the package against the SHA-256 published with the official release:
+
+```sh
+shasum -a 256 OpenCore-Patcher.pkg
+```
+
+If macOS quarantine blocks that verified package, remove quarantine metadata only from the selected artifact:
+
+```sh
+xattr -cr ./OpenCore-Patcher.pkg
+```
+
+For the uninstaller:
+
+```sh
+xattr -cr ./OpenCore-Patcher-Uninstaller.pkg
+```
+
+OCLP-CustoMac does **not** require Gatekeeper to be disabled system-wide. `xattr -cr` removes quarantine metadata from the named package; use it only on an official, hash-verified artifact. A targeted GUI quarantine-removal utility may be used as an optional alternative, but it does not replace checksum verification.
+
+Technical compatibility filenames remain `OpenCore-Patcher.app`, `OpenCore-Patcher.pkg`, and `OpenCore-Patcher-Uninstaller.pkg`.
+
+## APFS Patch Resources
+
+Both protected resource images use APFS:
+
+```text
+payloads.dmg            = APFS
+Universal-Binaries.dmg = APFS
+```
+
+The HFS+-to-APFS conversion preserved the logical payload tree. Complete root patching and Revert were runtime validated with the APFS resources. The runtime mount architecture remains unprivileged: the inner resource image mounts at a host-side sibling location and is exposed through the expected logical path without adding a general-purpose privileged nested-mount helper. Protected-image authentication uses the noninteractive stdin-passphrase path.
+
+## Tahoe Payload Provenance
+
+Two complete PatcherSupportPkg lines are intentionally preserved for the three Tahoe approaches.
+
+### Why complete working resources are required
+
+The final publicly released lzhoang2801 OCLP 3.0.0 Nightly configuration references a newer PatcherSupportPkg that no longer contains the Tahoe `AppleHDA.kext` expected by its included Modern Audio patch definition. When Modern Audio is applicable, that final published configuration cannot complete the expected Tahoe root patch because the required payload is absent.
+
+The preserved working configurations therefore use complete resource sources instead.
+
+### Preserved Reference Edition
+
+The Preserved Reference Edition uses an earlier working lzhoang2801 PatcherSupportPkg containing both the required Modern Wireless payloads and `AppleHDA.kext`. Its relevant Modern Wireless framework variants are the earlier ad-hoc-signed payloads, paired with the historical `amfi=0x80` and `ipc_control_port_options=0` configuration.
+
+### amfipassbeta Edition and OCLP-CustoMac
+
+These use a KGP-maintained derivative of the PatcherSupportPkg preserved by laobamac:
 
 https://github.com/kgp-macPro/PatcherSupportPkg-laobamac
 
-This PatcherSupportPkg provides complete Universal-Binaries and enables compatibility with AMFIPass.kext and `-amfipassbeta`.
+The laobamac-preserved line provides the non-ad-hoc-signed Modern Wireless framework variants used with `AMFIPass.kext + -amfipassbeta`. Because `AppleHDA.kext` was also absent from that preserved package, KGP restored it **unchanged** from the earlier working lzhoang2801 PatcherSupportPkg.
 
-### Verified Payload Relationship
+### Verified relationship of consumed payloads
 
-The PatcherSupportPkg history requires an important distinction.
+The audit did **not** establish that the two complete PatcherSupportPkg repositories are globally byte-identical. It established equivalence only for resources consumed by the enabled Modern Wireless and Modern Audio patchsets:
 
-The final published OCLP 3.0.0 Nightly release by lzhoang2801 references a newer PatcherSupportPkg that no longer contains the required Tahoe `AppleHDA.kext`. As a result, root patching with that currently published configuration fails because the expected AppleHDA payload cannot be found.
+- `wifip2pd` is byte-identical between the compared working package variants;
+- the restored `AppleHDA.kext` is byte-identical to the earlier working lzhoang2801 Tahoe payload;
+- five relevant framework executables retain identical architectures, paths, permissions, and executable `__text` sections:
+  - `IO80211`;
+  - `IO80211Old.dylib`;
+  - `LibSystemShim.dylib`;
+  - `WiFiPeerToPeer`;
+  - `WiFiPeerToPeerOld.dylib`;
+- relevant differences in those framework binaries are confined to embedded code-signature and associated link-edit metadata;
+- the earlier lzhoang2801 variants are ad-hoc signed;
+- the laobamac-derived variants contain non-ad-hoc embedded signatures.
 
-The separately preserved edition corrects this by redirecting OCLP to an earlier lzhoang2801 PatcherSupportPkg that still contains the required `AppleHDA.kext`.
+The payload definitions and consumed functional content remain preserved. OCLP-CustoMac's control logic has been substantially improved; the historical statement that no patcher logic changed no longer describes this project.
 
-This amfipassbeta edition instead uses a KGP-maintained derivative of laobamac's PatcherSupportPkg. Because laobamac's original package also did not contain the required Tahoe `AppleHDA.kext`, that payload was restored unchanged by KGP from the earlier working lzhoang2801 PatcherSupportPkg.
+## AppleVTD / IOMMU
 
-An offline comparison of all resources actually consumed by the enabled `Modern Wireless` and `Modern Audio` patchsets confirmed:
+The fully validated configuration uses `DisableIoMapper=true`. AppleVTD operation with `DisableIoMapper=false` remains post-release research and is not a release requirement.
 
-- `wifip2pd` is byte-identical in the earlier lzhoang2801 package and the KGP-maintained laobamac derivative.
-- The restored `AppleHDA.kext` is byte-identical to the payload from the earlier working lzhoang2801 PatcherSupportPkg.
-- Five Modern Wireless framework executables have identical architectures, paths, permissions and executable `__text` sections:
-  - `IO80211`
-  - `IO80211Old.dylib`
-  - `LibSystemShim.dylib`
-  - `WiFiPeerToPeer`
-  - `WiFiPeerToPeerOld.dylib`
-- The relevant difference in these five files is their embedded code-signature and associated link-edit metadata.
-- The earlier lzhoang2801 variants are ad-hoc signed.
-- The laobamac variants contain non-ad-hoc embedded signatures.
+The pre-publication audit found no grounded localized OCLP-only fix for Broadcom. Intel investigation additionally reaches AirportItlwm's PCI, DMA, and IOMMU behavior. This release does not modify DMAR, the XHC14 Reserved Memory Region, DeviceProperties, ACPI, IOMMU settings, or the user's EFI.
 
-The PatcherSupportPkg redirect does not modify OCLP's Modern Wireless or Modern Audio patch definitions, destination paths, APFS snapshot handling, kernel-cache rebuilding, root-patch application logic or root-patch reversion logic.
+## Existing amfipassbeta Edition Users
 
-This comparison refers specifically to the earlier working lzhoang2801 PatcherSupportPkg deliberately used by the preserved edition. It does not describe or make assumptions about the newer incomplete PatcherSupportPkg referenced by lzhoang2801's final published release.
+Migration is optional. The amfipassbeta Edition remains available, and `AMFIPass.kext + -amfipassbeta` remains valid.
 
----
+Recommended controlled migration:
 
-## Repository Scope
+```text
+Revert existing root patches
+    -> reboot CLEAN/sealed
+    -> install OCLP-CustoMac
+    -> retain AMFIPass.kext + -amfipassbeta
+    -> choose Modern Wi-Fi / Modern Audio
+    -> root patch
+    -> reboot
+```
 
-This repository:
+For Intel, an old Broadcom `IOName` spoof used solely for predecessor detection is no longer required by OCLP-CustoMac. Review the complete EFI migration guidance before removing historical DeviceProperties that may have other purposes.
 
-- provides a reproducible working reference of the original OCLP 3.0.0 Nightly snapshot
-- restores the missing Tahoe `AppleHDA.kext` and preserves the resources required for modern Wi-Fi and AWDL functionality
-- uses a PatcherSupportPkg compatible with AMFIPass.kext and `-amfipassbeta`, including AppleHDA
-- does **not introduce any new patch logic**
+## Community and Discussion
 
----
+- [InsanelyMac primary discussion](https://www.insanelymac.com/forum/topic/362042-experimental-fork-of-oclp-300-nightly-%E2%80%93-modern-wi-fi-awdl-and-applehda-fully-working-under-tahoe/)
+- [tonymacx86 mirror discussion](https://www.tonymacx86.com/threads/experimental-fork-of-oclp-3-0-0-nightly-modern-wi-fi-awdl-and-applehda-fully-working-under-tahoe-26-x.332849/)
 
-## Important Notes
+Repository, release, updater, and support URLs will be updated together during the separately authorized online-promotion step. This local release-candidate task does not create or guess a future GitHub release URL.
 
-- this fork only enables and preserves the original Tahoe patch functionality already implemented by the OCLP developers
-- this fork is **not supported by the OCLP developers**
-- intended for **advanced Hackintosh configurations only**
-- only modern audio (AppleHDA) and modern Wi-Fi + AWDL are expected to work reliably
-- no additional graphics acceleration or unsupported-Mac root patch frameworks are included
-- always keep a bootable backup before applying root patches
+## Project Development & Research
 
----
+**KGP / kgp-macPro** — Project lead; OCLP-CustoMac concept and architecture; experimental design; Tahoe patch-environment preservation and development; Broadcom and Intel hardware integration; hardware, operating-system, and multi-build runtime validation; evidence collection; technical review; and publication.
 
-## Community & Discussion
+**ChatGPT by OpenAI** — Technical research and reasoning partner for evidence analysis, hypothesis refinement, architecture and experiment planning, runtime-result interpretation, safety-boundary development, technical review, and documentation development.
 
-Additional discussion:
+**OpenAI Codex CLI** — Repository and source analysis, implementation, static validation, automated testing, reproducible-build verification, release packaging, Git-history construction, source auditing, and publication preparation.
 
-**tonymacx86 (mirror thread):**  
-https://www.tonymacx86.com/threads/experimental-fork-of-oclp-3-0-0-nightly-modern-wi-fi-awdl-and-applehda-fully-working-under-tahoe-26-x.332849/
+**AI attribution:** All AI assistance occurred under continuous human direction, hardware testing, review, validation, and final editorial control. No OpenAI endorsement is implied.
 
----
+## Upstream & Community Credits
 
-## Credits
+- [Dortania OpenCore Legacy Patcher Team](https://github.com/dortania/OpenCore-Legacy-Patcher)
+- [crystall1nedev](https://github.com/crystall1nedev)
+- [lzhoang2801](https://github.com/lzhoang2801)
+- [laobamac](https://github.com/laobamac) — OCLP-Mod and PatcherSupportPkg preservation; important comparative/reference implementation during the audits
+- [YBronst](https://github.com/YBronst) — OCLP-Plus; important comparative/reference implementation during the audits
+- [zxystd / OpenIntelWireless](https://github.com/OpenIntelWireless)
+- [lshbluesky](https://github.com/lshbluesky)
+- [Vinhts](https://github.com/Vinhts)
+- [Z3c0ld](https://github.com/Z3c0ld)
+- badbrain
+- [InsanelyMac community](https://www.insanelymac.com/)
+- [tonymacx86 community](https://www.tonymacx86.com/)
 
-- Dortania OCLP Team (original OCLP authors and developers)
-- [crystall1nedev](https://github.com/crystall1nedev) (Eva Isabella Luna) (original OCLP 3.0.0 Nightly release)
-- [lzhoang2801](https://github.com/lzhoang2801) (original OCLP 3.0.0 Nightly fork)
-- [kgp-macPro](https://github.com/kgp-macPro) (preservation, maintenance, AMFIPass integration, AppleHDA restoration, testing and documentation)
-- [laobamac](https://github.com/laobamac) (amfipassbeta PatcherSupportPkg)
-- [YBronst](https://github.com/YBronst) (OCLP Nightly development)
-- badbrain (boot-arg ipc_control_port_options=0 support)
-- [zxystd](https://github.com/zxystd) (itlwm/AirportItlwm project)
-- [lshbluesky](https://github.com/lshbluesky) (IntelBluetoothFirmware maintenance and releases)
-- [Vinhts](https://github.com/Vinhts) (IntelBTPatcher Tahoe 26.5 Bluetooth LE fixes)
-- [Z3c0ld](https://github.com/Z3c0ld) (IntelBTPatcher Tahoe 26.5 Bluetooth LE fixes)
-- InsanelyMac community
-- tonymacx86 community (mirror thread)
-
-For a complete list of OpenCore Legacy Patcher contributors, please refer to the original Dortania repository:
-
-https://github.com/dortania/OpenCore-Legacy-Patcher
-
----
-
-## Maintainer
-
-Maintained by **kgp**
-
-- GitHub: https://github.com/kgp-macPro
-- InsanelyMac: kgp (formerly KGP-iMacPro)
-- tonymacx86: kgp
-
----
+OCLP-CustoMac is an unofficial independent project. It is not supported or endorsed by the Dortania OCLP Team, Apple, Intel, Broadcom, or OpenAI. Attribution above does not imply authorship by KGP of upstream work.
 
 ## Disclaimer
 
-This repository provides a preserved and maintained Tahoe patch environment intended for advanced Hackintosh systems.
-
-Not intended for unsupported Macs requiring graphics acceleration root patches.
+Root patching modifies the macOS system snapshot and carries risk. Keep verified backups and a known-good recovery path. OCLP-CustoMac is intended for experienced users who understand OpenCore, EFI configuration, SIP requirements, KDK handling, and APFS snapshot recovery.
 
 Use at your own risk.
-
----
-
-If this repository was useful to you:
-
-A coffee is always appreciated ☕  
-https://buymeacoffee.com/kgp.macpro

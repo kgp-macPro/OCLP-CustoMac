@@ -183,3 +183,28 @@ Captured AX210 properties included `vendor-id <86 80 00 00>`, `device-id <25 27 
 | Phase 5 — pre-publication development-ID addendum | STATICALLY VALIDATED — RUNTIME DETECTION PENDING |
 
 The final online-repository promotion must reproduce this combined validated state, not blindly cherry-pick all development history.
+
+## OCLP-CustoMac publication contract
+
+The first public presentation must include:
+
+- `README.md` with the permanent project title `OCLP-CustoMac` and the fully validated Tahoe/Darwin-25 support boundary;
+- `Documentation/OCLP-CustoMac-3.0.0-Release-Notes.md` as the staged `v3.0.0` release body;
+- `Documentation/Intel-WiFi-Device-Support.md` linked directly from both documents;
+- prominent, non-deprecating documentation of the Preserved Reference Edition, the amfipassbeta Edition, and OCLP-CustoMac as three intentionally available Tahoe approaches;
+- the independently audited relationship to OCLP-Mod and OCLP-Plus, including the Intel-table reconstruction and the deliberately unprivileged APFS mount design;
+- exact Tahoe PatcherSupportPkg provenance without claiming global package byte identity;
+- ad-hoc package/checksum/quarantine instructions that do not tell users to disable Gatekeeper system-wide;
+- the Custom-Mac Tahoe support claim and explicit unverified status for Sonoma, Sequoia, and genuine Apple Intel Macs;
+- the current AppleVTD limitation and `DisableIoMapper=true` validation boundary;
+- project-development, AI-assistance, upstream, and community attribution.
+
+User-visible application, About, log/dialog, and installer presentation may use `OCLP-CustoMac`. Promotion must retain the technical `OpenCore-Patcher.app`, `OpenCore-Patcher.pkg`, `OpenCore-Patcher-Uninstaller.pkg`, bundle/package/helper/launch identifiers, installed paths, preference domains, root metadata keys, lifecycle paths, and the historical project identity required for compatibility.
+
+The permanent `tests/test_publication_contract.py` regression must assert:
+
+- the active root-patch registry contains exactly `ModernWireless` and `ModernAudio`;
+- the public display name and technical identity boundary remain intact;
+- the published component baseline remains synchronized with source.
+
+Online repository rename, updater/release URL changes, `v3.0.0` tag creation, and GitHub Release creation remain separate explicitly authorized actions after the Intel and Broadcom release-candidate hardware gates.
