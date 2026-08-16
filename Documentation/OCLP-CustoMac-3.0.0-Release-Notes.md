@@ -1,8 +1,8 @@
 # OCLP-CustoMac 3.0.0 — macOS Tahoe
 
-Future tag: `v3.0.0`
+OCLP-CustoMac 3.0.0 is the first public release of the focused OCLP-CustoMac branch for macOS Tahoe 26.x / Darwin 25.
 
-> Pre-publication release-candidate draft. No tag or GitHub Release exists yet. SHA-256 placeholders below are finalized only after the local RC build passes validation.
+This release passed complete automated validation, real GitHub CI, and final physical runtime validation with Intel AX210 and Broadcom BCM943602CDP.
 
 ## What OCLP-CustoMac Is
 
@@ -43,7 +43,7 @@ Experimental detection only authorizes the shared Modern Wi-Fi root patch. It do
 
 ## Runtime Validation
 
-The current final pre-publication RC, built from `6ef78041577bd00ef4d7b5aabe215ff969e4c8de` after the GUI-branding cleanup, has passed both physical runtime gates. **Gate 1 — Intel AX210** completed Revert, return to CLEAN, root patching, reboot, and the validated Intel runtime checks. **Gate 2 — Broadcom BCM943602CDP** then passed on the retained final-RC Modern Wireless / Modern Audio snapshot after the physical Intel-to-Broadcom adapter change. Publication runtime gates are **COMPLETE**. The detailed gate record is [OCLP-CustoMac 3.0.0 RC Runtime Validation](../REPORTS/OCLP_CUSTOMAC_3.0.0_RC_RUNTIME_VALIDATION.md).
+The final hardware-tested RC, built from `6ef78041577bd00ef4d7b5aabe215ff969e4c8de` after the GUI-branding cleanup, has passed both physical runtime gates. **Gate 1 — Intel AX210** completed Revert, return to CLEAN, root patching, reboot, and the validated Intel runtime checks. **Gate 2 — Broadcom BCM943602CDP** then passed on the retained final-RC Modern Wireless / Modern Audio snapshot after the physical Intel-to-Broadcom adapter change. Publication runtime gates are **COMPLETE**. The detailed gate record is [OCLP-CustoMac 3.0.0 RC Runtime Validation](../REPORTS/OCLP_CUSTOMAC_3.0.0_RC_RUNTIME_VALIDATION.md).
 
 ### Broadcom control
 
