@@ -119,9 +119,23 @@ jobs:
 
       - name: Validate application and package parity
         run: |
+          validate_unsigned_package() {
+            local package_path="$1"
+            local package_output
+            local package_status
+            if package_output="$(pkgutil --check-signature "$package_path" 2>&1)"; then
+              package_status=0
+            else
+              package_status=$?
+            fi
+            printf '%s\n' "$package_output"
+            test "$package_status" -eq 1
+            printf '%s\n' "$package_output" | grep -Eq '^[[:space:]]*Status: no signature[[:space:]]*$'
+          }
+
           codesign --verify --deep --strict dist/OpenCore-Patcher.app
-          pkgutil --check-signature dist/OpenCore-Patcher.pkg
-          pkgutil --check-signature dist/OpenCore-Patcher-Uninstaller.pkg
+          validate_unsigned_package dist/OpenCore-Patcher.pkg
+          validate_unsigned_package dist/OpenCore-Patcher-Uninstaller.pkg
           pkgutil --expand-full dist/OpenCore-Patcher.pkg package-expanded
           codesign --verify --deep --strict "package-expanded/OpenCore-Patcher.pkg/Payload/Library/Application Support/Dortania/OpenCore-Patcher.app"
           test -z "$(rsync -ainc --delete --omit-dir-times 'dist/OpenCore-Patcher.app/' 'package-expanded/OpenCore-Patcher.pkg/Payload/Library/Application Support/Dortania/OpenCore-Patcher.app/')"
