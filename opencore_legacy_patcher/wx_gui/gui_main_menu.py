@@ -61,7 +61,8 @@ class MainFrame(wx.Frame):
         Generate UI elements for the main menu
 
         Format:
-          - Title label: OpenCore Legacy Patcher v{X.Y.Z}
+          - Title label: OCLP-CustoMac
+          - Version label: Version {X.Y.Z}
           - Text:        Model: {Build or Host Model}
           - Buttons:
             - Build and Install OpenCore
@@ -76,12 +77,12 @@ class MainFrame(wx.Frame):
         logo = wx.StaticBitmap(self, bitmap=wx.Bitmap(str(self.constants.icns_resource_path / "OC-Patcher.icns"), wx.BITMAP_TYPE_ICON), pos=(-1, 0), size=(128, 128))
         logo.Centre(wx.HORIZONTAL)
 
-        # Title label: OpenCore Legacy Patcher v{X.Y.Z}
+        # Product name and version are intentionally separate visual levels.
         title_label = wx.StaticText(self, label=self.constants.patcher_name, pos=(-1, 128))
         title_label.SetFont(gui_support.font_factory(25, wx.FONTWEIGHT_BOLD))
         title_label.Centre(wx.HORIZONTAL)
 
-        version_label = wx.StaticText(self, label=f"Version {self.constants.patcher_version}{' (Nightly)' if not self.constants.commit_info[0].startswith('refs/tags') else ''}", pos=(-1, title_label.GetPosition()[1] + 32))
+        version_label = wx.StaticText(self, label=f"Version {self.constants.patcher_version}", pos=(-1, title_label.GetPosition()[1] + 32))
         version_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
         version_label.Centre(wx.HORIZONTAL)
         version_label.SetForegroundColour(wx.Colour(128, 128, 128))
@@ -342,7 +343,7 @@ Please check the Github page for more information about this release."""
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.AddSpacer(10)
         self.title_text = wx.StaticText(panel, label=f"A new version of {self.constants.patcher_name} is available!")
-        self.description = wx.StaticText(panel, label=f"{self.constants.patcher_name} {oclp_version} is now available - You have {self.constants.patcher_version}{' (Nightly)' if not self.constants.commit_info[0].startswith('refs/tags') else ''}. Would you like to update?")
+        self.description = wx.StaticText(panel, label=f"{self.constants.patcher_name} Version {oclp_version} is now available - You have Version {self.constants.patcher_version}. Would you like to update?")
         self.title_text.SetFont(gui_support.font_factory(19, wx.FONTWEIGHT_BOLD))
         self.description.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
         self.web_view = wx.html2.WebView.New(panel, style=wx.BORDER_SUNKEN)

@@ -51,6 +51,16 @@ class PublicationContractTests(unittest.TestCase):
         self.assertTrue(readme.startswith(expected_header))
         self.assertTrue((root / "docs/images/OC-Patcher.png").is_file())
 
+        gui_entry = (root / "opencore_legacy_patcher/wx_gui/gui_entry.py").read_text()
+        gui_main = (root / "opencore_legacy_patcher/wx_gui/gui_main_menu.py").read_text()
+        gui_about = (root / "opencore_legacy_patcher/wx_gui/gui_about.py").read_text()
+        self.assertIn("title=self.constants.patcher_name", gui_entry)
+        self.assertIn('label=f"Version {self.constants.patcher_version}"', gui_main)
+        self.assertIn('label=f"Version {self.constants.patcher_version}"', gui_about)
+        self.assertIn("Focused Modern Wi-Fi and AppleHDA Root Patching for macOS", gui_about)
+        for source in (gui_entry, gui_main, gui_about):
+            self.assertNotIn("(Nightly)", source)
+
     def test_operational_update_endpoints_target_the_production_repository(self) -> None:
         root = Path(__file__).resolve().parents[1]
         current = constants.Constants()

@@ -1362,7 +1362,7 @@ Hardware Information:
             global_constants=self.constants,
             screen_location=self.parent.GetPosition(),
             url=f"https://nightly.link/kgp-macPro/OCLP-lzhoang2801-amfipassbeta/workflows/build-app-wxpython/{branch}/OpenCore-Patcher.pkg.zip",
-            version_label="(Nightly)"
+            version_label="Nightly"
         )
 
 

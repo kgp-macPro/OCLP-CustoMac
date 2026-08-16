@@ -18,7 +18,7 @@ class AboutFrame(wx.Frame):
             return
 
         logging.info("Generating About frame")
-        super(AboutFrame, self).__init__(None, title="About", size=(350, 350), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
+        super(AboutFrame, self).__init__(None, title=f"About {global_constants.patcher_name}", size=(430, 350), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
         self.constants: constants.Constants = global_constants
         self.Centre()
         self.hyperlink_colour = (25, 179, 231)
@@ -36,9 +36,13 @@ class AboutFrame(wx.Frame):
         title.Centre(wx.HORIZONTAL)
 
         # Set version
-        version = wx.StaticText(frame, label=f"Version: {self.constants.patcher_version}", pos=(-1, title.GetPosition()[1] + title.GetSize()[1] + 5))
+        version = wx.StaticText(frame, label=f"Version {self.constants.patcher_version}", pos=(-1, title.GetPosition()[1] + title.GetSize()[1] + 5))
         version.SetFont(gui_support.font_factory(11, wx.FONTWEIGHT_NORMAL))
         version.Centre(wx.HORIZONTAL)
+
+        subtitle = wx.StaticText(frame, label="Focused Modern Wi-Fi and AppleHDA Root Patching for macOS", pos=(-1, version.GetPosition()[1] + version.GetSize()[1] + 7))
+        subtitle.SetFont(gui_support.font_factory(11, wx.FONTWEIGHT_NORMAL))
+        subtitle.Centre(wx.HORIZONTAL)
 
         # Description
         description = [
@@ -48,7 +52,7 @@ class AboutFrame(wx.Frame):
         ]
         spacer = 5
         for line in description:
-            desc = wx.StaticText(frame, label=line, pos=(-1, version.GetPosition()[1] + version.GetSize()[1] + 5 + spacer))
+            desc = wx.StaticText(frame, label=line, pos=(-1, subtitle.GetPosition()[1] + subtitle.GetSize()[1] + 5 + spacer))
             desc.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
             desc.Centre(wx.HORIZONTAL)
 
