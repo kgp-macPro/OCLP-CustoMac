@@ -1,10 +1,10 @@
 # Phase 5 — Runtime Validation Final
 
-Date: 2026-08-15
+Date: 2026-08-16 (pre-publication addendum recorded separately)
 
 Official phase: **Phase 5 — Generic Intel Modern Wi-Fi Integration**
 
-Status: **COMPLETE — RUNTIME VALIDATED — FROZEN**
+Status: **regular 87-ID paths runtime validated; pre-publication nine-ID development addendum statically validated, physical detection pending**
 
 ## Authority and tested artifact
 
@@ -15,7 +15,9 @@ Status: **COMPLETE — RUNTIME VALIDATED — FROZEN**
 - tested package: `/Users/kgp/Desktop/OCLP/OCLP-v2.0-phase5-intel-modern-wifi/OpenCore-Patcher.pkg`
 - package SHA-256: `dbd3bbd56e97dfd5f9edec4b5f662ae8750326e4901698c1b13d771083f458e1`
 
-The implementation is generic, not AX210-specific. Its 87 Intel PCI device IDs are the exact audited AirportItlwm IOKit-personality set. AX210 `8086:2725` is one ordinary member.
+The runtime-tested implementation is generic, not AX210-specific. Its regular 87 Intel PCI device IDs are the exact audited AirportItlwm IOKit-personality set. AX210 `8086:2725` is one ordinary member.
+
+The later detector-only addendum `555db89d3ed21285e1b84beded91932762b79ef9` preserves those 87 IDs and adds nine separately classified Intel BZ/SC development IDs: `272B, A840, 7740, 4D40, E440, E340, D340, 6E70, D240`. Those additions are statically validated but were not present in the package identified above. This report does not transfer AX210's runtime result to BE-series hardware.
 
 ## Two independent validation layers
 
@@ -23,7 +25,7 @@ The implementation is generic, not AX210-specific. Its 87 Intel PCI device IDs a
 
 ```text
 real Intel PCI hardware
-  -> vendor 8086 + an authoritative supported device ID
+  -> vendor 8086 + a regular or development device ID
   -> Intel Modern Wireless detected
   -> existing Modern Wi-Fi root patch applicable
 ```
@@ -39,6 +41,8 @@ physical Intel adapter
 ```
 
 These are independent proofs. OCLP does not install, download, inject, enable, or configure AirportItlwm and does not modify the user's EFI.
+
+For experimental/development IDs, Layer 1 can succeed while Layer 2 remains unsupported by stock AirportItlwm. A compatible experimental/modified external AirportItlwm build may be required.
 
 ## Broadcom regression control
 
@@ -134,6 +138,19 @@ AirPlay was independently confirmed working flawlessly. No broader claim is made
 
 Phase-2/3/4 functionality remained frozen.
 
+## Pre-publication development-hardware addendum status
+
+- regular current-AirportItlwm set: 87 IDs, unchanged;
+- experimental/development BZ/SC set: 9 IDs;
+- final detector set: 96 IDs;
+- BE200/BE202 discrete identity: `8086:272B`, with subsystem identity distinguishing the product;
+- BE201/BE211/BE213 integrated identity: BZ/SC host ID plus RF/subdevice identity; the detector recognizes the host ID without fabricating a marketing SKU;
+- `0885/0886`: still excluded as legacy Wireless-N/WiMAX 6150 identities;
+- OCLP detection/applicability for all nine additions: statically proven;
+- physical BE-series detection and external-driver runtime binding: not yet runtime validated.
+
+The existing GUI remains one `Modern Wi-Fi` control, the root-patch dictionary is unchanged, Intel detection itself remains no-KDK, and no EFI/ACPI/DMAR/DeviceProperties path was added.
+
 ## Final project status
 
 | Phase | Status |
@@ -142,6 +159,7 @@ Phase-2/3/4 functionality remained frozen.
 | Phase 3B | COMPLETE — RUNTIME VALIDATED — FROZEN |
 | Phase 3C | COMPLETE — RUNTIME VALIDATED — FROZEN |
 | Phase 4 | COMPLETE — RUNTIME VALIDATED — FROZEN |
-| Phase 5 — Generic Intel Modern Wi-Fi Integration | COMPLETE — RUNTIME VALIDATED — FROZEN |
+| Phase 5 — regular 87-ID implementation | COMPLETE — RUNTIME VALIDATED |
+| Phase 5 — pre-publication development-ID addendum | STATICALLY VALIDATED — RUNTIME DETECTION PENDING |
 
 The terms Phase-5A and Phase-5B describe runtime-test ordering only. They are not official product phases.

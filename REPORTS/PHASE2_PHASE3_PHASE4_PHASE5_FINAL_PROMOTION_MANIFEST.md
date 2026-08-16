@@ -1,12 +1,12 @@
 # Phase 2 + Phase 3 + Phase 4 + Phase 5 Final Promotion Manifest
 
-Date: 2026-08-15
+Date: 2026-08-16 (pre-publication Phase-5 addendum)
 
 ## Promotion authority
 
-The canonical final functional source through Phase 5 is:
+The canonical final functional source through the Phase-5 development-hardware addendum is:
 
-`13a8aeaaaa877b197b54cf6f8452a5801d7e36ff`
+`555db89d3ed21285e1b84beded91932762b79ef9`
 
 Its frozen predecessor boundaries are:
 
@@ -14,8 +14,10 @@ Its frozen predecessor boundaries are:
 - Phase-4 implementation: `a2b6e60ded9d9cbcc849ab8102de9d58a73f37b0`
 - Phase-4 documentation: `d0d0aaf26057d1e8faa31773f6edef20098e14d6`
 - Phase-5 pre-runtime documentation: `83c90cd65dc9903b49657886af1f687ddad2f954`
+- Phase-5 regular 87-ID implementation: `13a8aeaaaa877b197b54cf6f8452a5801d7e36ff`
+- Phase-5 development-ID implementation: `555db89d3ed21285e1b84beded91932762b79ef9`
 
-All phases listed here are **COMPLETE — RUNTIME VALIDATED — FROZEN**. Promotion must reconstruct the final source behavior and regression coverage. It must not blindly replay intermediate development commits or reintroduce superseded experiments.
+Phase 2 through Phase 4 and the regular Phase-5 paths are **COMPLETE — RUNTIME VALIDATED**. The pre-publication Phase-5 development-ID addendum is detector-only and statically validated pending a physical development-adapter detection check. Promotion must reconstruct the final source behavior and regression coverage. It must not blindly replay intermediate development commits or reintroduce superseded experiments.
 
 Detailed supporting authorities remain:
 
@@ -76,21 +78,26 @@ Mandatory Phase-4 tests include `test_phase4_disk_images.py`, `test_phase4_runti
 
 **Promotion:** MUST PROMOTE.
 
-**Canonical implementation:** `13a8aeaaaa877b197b54cf6f8452a5801d7e36ff`.
+**Canonical implementation:** `555db89d3ed21285e1b84beded91932762b79ef9`, containing the runtime-validated regular implementation `13a8aeaaaa877b197b54cf6f8452a5801d7e36ff` plus the detector-only development-hardware addendum.
 
-### Authoritative device support
+### Two source-backed detection classes
 
-- source authority: the 87-entry `IOPCIMatch` exposed identically by the audited local AirportItlwm personalities at itlwm HEAD `0b17225dfbe1b7810b114f8fa9148b09f56d4efd`;
-- qualifying identity: PCI class `028000`, Intel vendor `8086`, and one of the exact 87 device IDs;
-- final KGP count: 87;
+- regular source authority: the 87-entry `IOPCIMatch` exposed identically by the audited local AirportItlwm personalities at itlwm HEAD `0b17225dfbe1b7810b114f8fa9148b09f56d4efd`;
+- development source authority: the nine explicit BZ/SC Intel wireless PCI transport IDs in current upstream `iwlwifi`;
+- qualifying identity: PCI class `028000`, Intel vendor `8086`, and one of the exact 96 final device IDs;
+- regular count: 87; development count: 9; final KGP count: 96;
 - AX210 `8086:2725`: included generically, with no special-case branch;
 - include AirportItlwm-backed `2720` and `2729` even though OCLP-Mod omitted them;
-- exclude Mod-only `0885`, `0886`, and `272B` because the authoritative AirportItlwm personality does not expose them.
+- development IDs: `272B, A840, 7740, 4D40, E440, E340, D340, 6E70, D240`;
+- include `272B` as discrete BZ development hardware associated with BE200/BE202/Killer/OEM variants; subsystem/RF data, not the base ID alone, distinguishes the marketing SKU;
+- exclude Mod-only `0885` and `0886`: legacy Centrino Wireless-N/WiMAX 6150, absent from the current AirportItlwm personality and irrelevant to the current BZ/SC development goal.
+
+OCLP-Mod is a cross-check, not the authority. Exact set algebra is: AirportItlwm ∩ Mod = 85; BZ/SC ∩ Mod = `272B`; final KGP − Mod = `2720, 2729, A840, 7740, 4D40, E440, E340, D340, 6E70, D240`; Mod − final KGP = `0885, 0886`.
 
 **Final source:**
 
-- `opencore_legacy_patcher/datasets/pci_data.py` — `intel_wireless_ids.AirportItlwm`;
-- `opencore_legacy_patcher/detections/device_probe.py` — `IntelWirelessCard`, complete `wifi_devices` inventory, physical-identity classification, concise initial detection log;
+- `opencore_legacy_patcher/datasets/pci_data.py` — `intel_wireless_ids.AirportItlwm` and `intel_wireless_ids.Experimental`;
+- `opencore_legacy_patcher/detections/device_probe.py` — `IntelWirelessCard`, `DetectionClass`, complete `wifi_devices` inventory, physical-identity classification, concise supported/experimental initial detection log;
 - `opencore_legacy_patcher/sys_patch/patchsets/hardware/networking/modern_wireless.py` — `ModernWireless.present()` accepts supported Broadcom or Intel inventory;
 - `tests/test_phase5_intel_modern_wireless.py`;
 - `tests/test_modern_wireless_regression.py`.
@@ -110,9 +117,13 @@ Promotion must preserve two independent layers:
 
 OCLP must not install/download AirportItlwm or mutate `config.plist`, `Kernel/Add`, boot arguments, EFI, DeviceProperties, ACPI, DMAR, or NVRAM. Neither Broadcom nor Intel spoofing is part of the feature.
 
+The experimental class grants only OCLP root-patch applicability. It does not assert stock AirportItlwm runtime support. A compatible experimental or modified external driver may be required. PCIe/CNVi/CNVio2/CNVio3 interface type is not an exclusion predicate.
+
 ### Required regressions
 
-- every authoritative Intel ID applicable;
+- every one of the 87 authoritative current-AirportItlwm IDs applicable;
+- every one of the nine frozen BZ/SC development IDs applicable;
+- final 96-ID composition exact and `0885/0886` absent;
 - unsupported Intel ID rejected;
 - non-Intel vendor with overlapping device ID rejected;
 - AX210 and multiple supported generations detected generically;
@@ -122,7 +133,7 @@ OCLP must not install/download AirportItlwm or mutate `config.plist`, `Kernel/Ad
 - Wi-Fi-only no-KDK behavior preserved;
 - no Intel EFI-builder path, spoofing, or hardware mutation.
 
-The final implementation suite passed 199 tests. The tested package is `/Users/kgp/Desktop/OCLP/OCLP-v2.0-phase5-intel-modern-wifi/OpenCore-Patcher.pkg`, SHA-256 `dbd3bbd56e97dfd5f9edec4b5f662ae8750326e4901698c1b13d771083f458e1`.
+The addendum implementation suite passed 204 tests. The earlier regular-path runtime-tested package remains `/Users/kgp/Desktop/OCLP/OCLP-v2.0-phase5-intel-modern-wifi/OpenCore-Patcher.pkg`, SHA-256 `dbd3bbd56e97dfd5f9edec4b5f662ae8750326e4901698c1b13d771083f458e1`. It does not contain or runtime-prove the later development-ID addendum.
 
 ## Phase-5 runtime evidence boundary
 
@@ -137,8 +148,10 @@ Captured AX210 properties included `vendor-id <86 80 00 00>`, `device-id <25 27 
 
 ## Approaches explicitly not for promotion
 
-- OCLP-Mod-only IDs `0885`, `0886`, and `272B`;
+- OCLP-Mod-only legacy IDs `0885` and `0886`;
 - copying the OCLP-Mod table without AirportItlwm reconciliation;
+- claiming that a base integrated PCI ID uniquely identifies BE201/BE211/BE213 without required RF/subsystem evidence;
+- treating experimental OCLP applicability as a stock AirportItlwm support guarantee;
 - AX210-only logic or marketing-name matching;
 - automatic Broadcom or Intel spoofing;
 - any Intel-specific EFI mutation, AirportItlwm downloader/installer/injector, or `Kernel/Add` change;
@@ -155,6 +168,7 @@ Captured AX210 properties included `vendor-id <86 80 00 00>`, `device-id <25 27 
 | Phase 3B | COMPLETE — RUNTIME VALIDATED — FROZEN |
 | Phase 3C | COMPLETE — RUNTIME VALIDATED — FROZEN |
 | Phase 4 | COMPLETE — RUNTIME VALIDATED — FROZEN |
-| Phase 5 — Generic Intel Modern Wi-Fi Integration | COMPLETE — RUNTIME VALIDATED — FROZEN |
+| Phase 5 — regular 87-ID integration | COMPLETE — RUNTIME VALIDATED |
+| Phase 5 — pre-publication development-ID addendum | STATICALLY VALIDATED — RUNTIME DETECTION PENDING |
 
 The final online-repository promotion must reproduce this combined validated state, not blindly cherry-pick all development history.

@@ -1,6 +1,6 @@
 # Phase 5 — Generic Intel Modern Wi-Fi Implementation
 
-Date: 2026-08-15
+Date: 2026-08-16 (pre-publication development-hardware addendum)
 
 Frozen Phase-4 functional baseline: `a2b6e60ded9d9cbcc849ab8102de9d58a73f37b0`
 
@@ -8,16 +8,18 @@ Frozen Phase-4 documentation baseline: `d0d0aaf26057d1e8faa31773f6edef20098e14d6
 
 Phase-5 implementation commit: `13a8aeaaaa877b197b54cf6f8452a5801d7e36ff` (`wireless: detect supported Intel modern Wi-Fi hardware`)
 
+Phase-5 development-hardware addendum: `555db89d3ed21285e1b84beded91932762b79ef9` (`wireless: extend experimental Intel Wi-Fi detection`)
+
 ## Implementation
 
 Phase 5 is a narrow hardware-applicability extension.
 
 | File | Final responsibility |
 |---|---|
-| `opencore_legacy_patcher/datasets/pci_data.py` | Defines the frozen 87-ID `intel_wireless_ids.AirportItlwm` set derived from the local AirportItlwm personality. |
-| `opencore_legacy_patcher/detections/device_probe.py` | Adds vendor-`8086` `IntelWirelessCard`, classifies only audited IDs as AirportItlwm-supported, retains all discovered Wi-Fi devices, and logs supported Intel identity once during the initial probe. |
+| `opencore_legacy_patcher/datasets/pci_data.py` | Preserves the 87-ID `intel_wireless_ids.AirportItlwm` set and separately defines the nine-ID `Experimental` BZ/SC development set. |
+| `opencore_legacy_patcher/detections/device_probe.py` | Classifies vendor-`8086` Intel devices into current-AirportItlwm or experimental/development detection classes, maps both to the existing applicability path, retains the complete Wi-Fi inventory, and logs the resolved identity once. |
 | `opencore_legacy_patcher/sys_patch/patchsets/hardware/networking/modern_wireless.py` | Extends applicability to supported Intel or the existing supported Broadcom chipsets. Patch construction is unchanged. |
-| `tests/test_phase5_intel_modern_wireless.py` | Protects the authoritative set, vendor boundary, every supported ID, excluded discrepancies, multi-device inventory, shared payload, no-KDK behavior, GUI-selection default, and no EFI integration. |
+| `tests/test_phase5_intel_modern_wireless.py` | Protects all 87 regular IDs, all nine development IDs, vendor/interface boundaries, excluded legacy IDs, multi-device inventory, shared payload, no-KDK behavior, GUI-selection default, concise logging, and no EFI integration. |
 | `tests/test_modern_wireless_regression.py` | Preserves the Broadcom and hardware-agnostic selection regressions while allowing the intended direct Intel predicate. |
 
 The probe continues to expose `computer.wifi` as a backwards-compatible primary shortcut. It additionally records `computer.wifi_devices` so a synthetic Broadcom+Intel inventory remains one Modern Wireless applicability result. If both Intel and a historical Broadcom/Atheros device exist, the historical non-Intel device remains the primary shortcut; existing EFI-builder behavior is not displaced.
@@ -28,6 +30,7 @@ The probe continues to expose `computer.wifi` as a backwards-compatible primary 
 IOPCIDevice class 028000
   -> physical PCI identity from the existing anti-spoof probe
   -> vendor 8086 + one of 87 AirportItlwm IDs
+                    OR one of 9 audited BZ/SC development IDs
   -> IntelWirelessCard.Chipsets.AirportItlwm
   -> ModernWireless.present() == true
   -> "Networking: Modern Wireless" applicable
@@ -43,6 +46,14 @@ Supported Intel discovery emits one concise initial-probe message, for example:
 
 Repeated GUI/state revalidation does not log the message again.
 
+Development discovery is explicitly distinguishable without adding GUI controls:
+
+```text
+- Detected experimental Intel Modern Wireless device: 8086:272B
+```
+
+`IntelWirelessCard.DetectionClass` records whether the identity came from the current AirportItlwm personality or the experimental/development set. Both classes intentionally reuse the same `Chipsets.AirportItlwm` applicability token so `ModernWireless.present()` and the frozen patch source do not need another branch. This token means the external AirportItlwm architecture is expected; it is not a stock-driver support claim for a development ID.
+
 ## Shared payload and KDK behavior
 
 Intel and Broadcom return the same existing Tahoe patch dictionary:
@@ -55,7 +66,7 @@ The `_base_patch`, `_extended_patch`, and `patches` method text is byte-for-byte
 
 `f71883e711d7eadaa45fb23799024db1d38c1da82b57c55044687cd430f880fe`
 
-Intel Modern Wi-Fi alone inherits `requires_kernel_debug_kit() == False`. Modern Audio and every other independent KDK requirement remain authoritative.
+Intel Modern Wi-Fi alone inherits `requires_kernel_debug_kit() == False` for both detection classes. Modern Audio and every other independent KDK requirement remain authoritative.
 
 ## No-spoof / no-EFI invariant
 
@@ -89,6 +100,8 @@ Intel hardware
 
 Neither result substitutes for the other. Physical Phase-5 validation must record the shared-payload cross-hardware test and direct Intel-detection/patch test independently.
 
+For the nine development IDs, the first required physical result is likewise detection/applicability only. Runtime binding may require a compatible experimental or modified AirportItlwm build and is not guaranteed by this addendum.
+
 ## Broadcom regression
 
 The existing supported Broadcom chipset enums and PCI tables were not edited. Tests show:
@@ -101,19 +114,22 @@ The existing supported Broadcom chipset enums and PCI tables were not edited. Te
 
 BCM943602CDP was the independent Broadcom runtime-control device.
 
-## Validation results
+## Addendum validation results
 
-Pre-commit focused run:
+Implementation review at `555db89d3ed21285e1b84beded91932762b79ef9`:
 
-- 47 Phase-3B/Modern Wireless/Phase-5 tests: PASS
-- 16 direct Phase-5 plus Broadcom regression tests: PASS
-
-Pre-documentation complete suite:
-
-- 199 tests: PASS
+- 18 direct Phase-5 tests: PASS
+- 59 Phase-3B/Modern Wireless/Phase-5 focused tests: PASS
+- 204 complete-suite tests: PASS
 - inherited `ResourceWarning` at `efi_builder/support.py:130`: unchanged and non-failing
+- `compileall`: PASS
+- `git diff --check`: PASS
 
-Final validation from a clean source clone at the exact implementation commit:
+The direct matrix loops over every regular and every development ID. It also proves `2725` remains regular, `272B` is experimental, `0885/0886` remain rejected, AX201/CNVio remains accepted, all development IDs share the Broadcom payload dictionary, and none adds a KDK requirement.
+
+## Original Phase-5 package validation
+
+The previously runtime-tested regular Phase-5 build at `13a8ae...` retained these results:
 
 - 199 tests: PASS
 - `compileall`: PASS
@@ -138,7 +154,7 @@ At implementation review:
 
 No Phase-2/3/4 root state, recovery, KDK, GUI, payload-image, nested-mount, audio, or Revert behavior was changed.
 
-## Runtime validation and frozen status
+## Runtime validation status
 
 Runtime-tested Phase-5 artifact:
 
@@ -159,4 +175,4 @@ The captured AX210 properties were `vendor-id <86 80 00 00>`, `device-id <25 27 
 
 Hack-to-MBP-M1 Screen Mirroring worked once but was otherwise unreliable. It is not classified as a Phase-5 detection failure or as validated Intel functionality. FeatureUnlock/Tahoe Screen Mirroring is a separate research area and Phase 5 did not modify it. Other Continuity/AWDL services not positively exercised in this session are not claimed.
 
-Phase 5 — Generic Intel Modern Wi-Fi Integration is **COMPLETE — RUNTIME VALIDATED — FROZEN**. The earlier Phase-5A/Phase-5B labels describe test sequencing only; they are not separate official product phases.
+The 87-ID regular detector, AX210 path, Broadcom control, and shared payload remain **RUNTIME VALIDATED**. The nine-ID pre-publication addendum is **STATICALLY VALIDATED; PHYSICAL DEVELOPMENT-HARDWARE DETECTION PENDING**. It does not invalidate or overstate the earlier runtime results.
