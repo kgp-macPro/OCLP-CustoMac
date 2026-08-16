@@ -10,6 +10,8 @@ Phase-5 implementation commit: `13a8aeaaaa877b197b54cf6f8452a5801d7e36ff` (`wire
 
 Phase-5 development-hardware addendum: `555db89d3ed21285e1b84beded91932762b79ef9` (`wireless: extend experimental Intel Wi-Fi detection`)
 
+Public support/parity checkpoint: `f8ce3acbfe08de7923d8022411aa64a665a14d52` (`test: enforce public Intel Wi-Fi support parity`)
+
 ## Implementation
 
 Phase 5 is a narrow hardware-applicability extension.
@@ -21,6 +23,8 @@ Phase 5 is a narrow hardware-applicability extension.
 | `opencore_legacy_patcher/sys_patch/patchsets/hardware/networking/modern_wireless.py` | Extends applicability to supported Intel or the existing supported Broadcom chipsets. Patch construction is unchanged. |
 | `tests/test_phase5_intel_modern_wireless.py` | Protects all 87 regular IDs, all nine development IDs, vendor/interface boundaries, excluded legacy IDs, multi-device inventory, shared payload, no-KDK behavior, GUI-selection default, concise logging, and no EFI integration. |
 | `tests/test_modern_wireless_regression.py` | Preserves the Broadcom and hardware-agnostic selection regressions while allowing the intended direct Intel predicate. |
+| `Documentation/Intel-WiFi-Device-Support.md` | Public Regular/Experimental/Excluded transport table and runtime caveats. |
+| `tests/test_phase5_intel_wifi_documentation.py` | Enforces exact source/public-document parity and classification. |
 
 The probe continues to expose `computer.wifi` as a backwards-compatible primary shortcut. It additionally records `computer.wifi_devices` so a synthetic Broadcom+Intel inventory remains one Modern Wireless applicability result. If both Intel and a historical Broadcom/Atheros device exist, the historical non-Intel device remains the primary shortcut; existing EFI-builder behavior is not displaced.
 
@@ -116,16 +120,16 @@ BCM943602CDP was the independent Broadcom runtime-control device.
 
 ## Addendum validation results
 
-Implementation review at `555db89d3ed21285e1b84beded91932762b79ef9`:
+Final source/public-document review through `f8ce3acbfe08de7923d8022411aa64a665a14d52`:
 
-- 18 direct Phase-5 tests: PASS
-- 59 Phase-3B/Modern Wireless/Phase-5 focused tests: PASS
-- 204 complete-suite tests: PASS
+- 22 direct Phase-5 detector/document parity tests: PASS
+- 63 Phase-3B/Modern Wireless/Phase-5 focused tests: PASS
+- 208 complete-suite tests: PASS
 - inherited `ResourceWarning` at `efi_builder/support.py:130`: unchanged and non-failing
 - `compileall`: PASS
 - `git diff --check`: PASS
 
-The direct matrix loops over every regular and every development ID. It also proves `2725` remains regular, `272B` is experimental, `0885/0886` remain rejected, AX201/CNVio remains accepted, all development IDs share the Broadcom payload dictionary, and none adds a KDK requirement.
+The direct matrix loops over every regular and every development ID. It also proves `2725` remains regular, `272B` is experimental, `0885/0886` remain rejected, AX201/CNVio remains accepted, all development IDs share the Broadcom payload dictionary, none adds a KDK requirement, and the public classification tables match source exactly.
 
 ## Original Phase-5 package validation
 
@@ -176,3 +180,15 @@ The captured AX210 properties were `vendor-id <86 80 00 00>`, `device-id <25 27 
 Hack-to-MBP-M1 Screen Mirroring worked once but was otherwise unreliable. It is not classified as a Phase-5 detection failure or as validated Intel functionality. FeatureUnlock/Tahoe Screen Mirroring is a separate research area and Phase 5 did not modify it. Other Continuity/AWDL services not positively exercised in this session are not claimed.
 
 The 87-ID regular detector, AX210 path, Broadcom control, and shared payload remain **RUNTIME VALIDATED**. The nine-ID pre-publication addendum is **STATICALLY VALIDATED; PHYSICAL DEVELOPMENT-HARDWARE DETECTION PENDING**. It does not invalidate or overstate the earlier runtime results.
+
+## Prepared README link
+
+The later publication README should include this wording without changing the current development README during this addendum:
+
+> ### Intel Wi-Fi Device Support
+>
+> OCLP-CustoMac directly detects the current regular AirportItlwm-supported Intel device set and additionally selected experimental Intel BZ/SC Wi-Fi 7 transport IDs used for ongoing driver development.
+>
+> Runtime support for experimental devices depends on the external AirportItlwm implementation used. No Broadcom IOName spoof is required for OCLP-CustoMac Intel detection.
+>
+> [Complete Intel Wi-Fi Device Support List](Documentation/Intel-WiFi-Device-Support.md)

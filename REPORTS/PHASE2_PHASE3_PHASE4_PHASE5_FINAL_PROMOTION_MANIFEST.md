@@ -101,6 +101,8 @@ OCLP-Mod is a cross-check, not the authority. Exact set algebra is: AirportItlwm
 - `opencore_legacy_patcher/sys_patch/patchsets/hardware/networking/modern_wireless.py` — `ModernWireless.present()` accepts supported Broadcom or Intel inventory;
 - `tests/test_phase5_intel_modern_wireless.py`;
 - `tests/test_modern_wireless_regression.py`.
+- `Documentation/Intel-WiFi-Device-Support.md` — mandatory public support contract;
+- `tests/test_phase5_intel_wifi_documentation.py` — mandatory source/document parity guard.
 
 ### Shared patchset and KDK invariant
 
@@ -132,8 +134,16 @@ The experimental class grants only OCLP root-patch applicability. It does not as
 - existing Broadcom result unchanged;
 - Wi-Fi-only no-KDK behavior preserved;
 - no Intel EFI-builder path, spoofing, or hardware mutation.
+- public Regular IDs exactly equal the implementation regular set;
+- public Experimental / Development IDs exactly equal the implementation experimental set;
+- documented `0885/0886` exclusions remain outside the detector;
+- public classification cannot drift without a deliberate synchronized update.
 
-The addendum implementation suite passed 204 tests. The earlier regular-path runtime-tested package remains `/Users/kgp/Desktop/OCLP/OCLP-v2.0-phase5-intel-modern-wifi/OpenCore-Patcher.pkg`, SHA-256 `dbd3bbd56e97dfd5f9edec4b5f662ae8750326e4901698c1b13d771083f458e1`. It does not contain or runtime-prove the later development-ID addendum.
+The final addendum/public-parity suite passed 208 tests. The earlier regular-path runtime-tested package remains `/Users/kgp/Desktop/OCLP/OCLP-v2.0-phase5-intel-modern-wifi/OpenCore-Patcher.pkg`, SHA-256 `dbd3bbd56e97dfd5f9edec4b5f662ae8750326e4901698c1b13d771083f458e1`. It does not contain or runtime-prove the later development-ID addendum.
+
+### Public README contract
+
+Publication MUST ship `Documentation/Intel-WiFi-Device-Support.md` and link it from the public README under an Intel Wi-Fi Device Support section. The README must state that the regular AirportItlwm set and selected experimental BZ/SC transports are detected, experimental runtime support depends on external AirportItlwm, and no Broadcom IOName spoof is required. The current development README is intentionally unchanged until the publication step.
 
 ## Phase-5 runtime evidence boundary
 
@@ -158,6 +168,7 @@ Captured AX210 properties included `vendor-id <86 80 00 00>`, `device-id <25 27 
 - treating working AirportItlwm as proof of OCLP detection, or detection as proof of runtime binding;
 - FeatureUnlock or Screen Mirroring experiments;
 - temporary Phase-5 audit/debug instrumentation;
+- publishing an Intel detector list without the synchronized public support document and parity test;
 - any Phase-2/3/4 superseded experiment listed in the earlier manifests.
 
 ## Final phase status

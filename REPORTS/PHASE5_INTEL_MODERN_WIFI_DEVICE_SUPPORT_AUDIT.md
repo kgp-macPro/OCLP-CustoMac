@@ -309,3 +309,9 @@ The development set is statically validated for OCLP detection and shared root-p
 ## Publication wording prepared
 
 > OCLP-CustoMac directly detects the current Intel device set supported by AirportItlwm and additionally recognizes selected experimental Intel Wi-Fi hardware, including current Wi-Fi 7 / BE-series devices, so ongoing driver development is not blocked by the root patcher. Runtime support for experimental devices depends on the external AirportItlwm build and is not guaranteed by OCLP-CustoMac. No Broadcom IOName spoof is required for Intel detection.
+
+## Public support contract
+
+The complete public-facing list is [Documentation/Intel-WiFi-Device-Support.md](../Documentation/Intel-WiFi-Device-Support.md). It contains separately marked Regular, Experimental / Development, and Explicitly Excluded tables.
+
+`tests/test_phase5_intel_wifi_documentation.py` extracts only the marked table regions and asserts exact equality with `intel_wireless_ids.AirportItlwm` and `intel_wireless_ids.Experimental`. It also freezes the `0885/0886` exclusion and every row's classification. The implementation remains the source of truth; a deliberate detector update must update the public table and parity test in the same change.

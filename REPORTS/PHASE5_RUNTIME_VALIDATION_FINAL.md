@@ -151,6 +151,8 @@ Phase-2/3/4 functionality remained frozen.
 
 The existing GUI remains one `Modern Wi-Fi` control, the root-patch dictionary is unchanged, Intel detection itself remains no-KDK, and no EFI/ACPI/DMAR/DeviceProperties path was added.
 
+The public detector contract is [Documentation/Intel-WiFi-Device-Support.md](../Documentation/Intel-WiFi-Device-Support.md). Automated parity tests require its 87 Regular and nine Experimental / Development IDs to match implementation exactly and keep `0885/0886` explicitly excluded.
+
 ## Final project status
 
 | Phase | Status |
