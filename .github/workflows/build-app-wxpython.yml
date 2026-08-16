@@ -17,9 +17,6 @@ jobs:
       PYTHON_INSTALLER_URL: https://www.python.org/ftp/python/3.14.3/python-3.14.3-macos11.pkg
       PYTHON_INSTALLER_SHA256: 50b709f72cb5ed87d5882901923face981dd657569717761832c36db3bf08238
       PYTHON_FRAMEWORK_SHA256: 131f5211d7a7ec6279abcc2e4b0b97f8559d8eb77d5a28c22771f9ced084360f
-      PYTHON_FRAMEWORK_PARENT: ${{ runner.temp }}/python-3.14.3
-      PYTHON_BIN: ${{ runner.temp }}/python-3.14.3/Python.framework/Versions/3.14/bin/python3
-      DYLD_FRAMEWORK_PATH: ${{ runner.temp }}/python-3.14.3
 
       # GitHub Information
       branch: ${{ github.ref }}
@@ -67,6 +64,10 @@ jobs:
         run: |
           PYTHON_INSTALLER="$RUNNER_TEMP/python-3.14.3-macos11.pkg"
           PYTHON_PACKAGE_ROOT="$RUNNER_TEMP/python-3.14.3-package"
+          PYTHON_FRAMEWORK_PARENT="$RUNNER_TEMP/python-3.14.3"
+          PYTHON_BIN="$PYTHON_FRAMEWORK_PARENT/Python.framework/Versions/3.14/bin/python3"
+          DYLD_FRAMEWORK_PATH="$PYTHON_FRAMEWORK_PARENT"
+          export PYTHON_FRAMEWORK_PARENT PYTHON_BIN DYLD_FRAMEWORK_PATH
           curl --fail --location --retry 3 --output "$PYTHON_INSTALLER" "$PYTHON_INSTALLER_URL"
           printf '%s  %s\n' "$PYTHON_INSTALLER_SHA256" "$PYTHON_INSTALLER" | shasum -a 256 --check
           pkgutil --expand-full "$PYTHON_INSTALLER" "$PYTHON_PACKAGE_ROOT"
@@ -75,6 +76,9 @@ jobs:
           test -x "$PYTHON_BIN"
           printf '%s  %s\n' "$PYTHON_FRAMEWORK_SHA256" "$PYTHON_FRAMEWORK_PARENT/Python.framework/Versions/3.14/Python" | shasum -a 256 --check
           test "$(arch -x86_64 "$PYTHON_BIN" -c 'import platform; print(f"{platform.python_version()} {platform.machine()}")')" = "3.14.3 x86_64"
+          printf 'PYTHON_FRAMEWORK_PARENT=%s\n' "$PYTHON_FRAMEWORK_PARENT" >> "$GITHUB_ENV"
+          printf 'PYTHON_BIN=%s\n' "$PYTHON_BIN" >> "$GITHUB_ENV"
+          printf 'DYLD_FRAMEWORK_PATH=%s\n' "$DYLD_FRAMEWORK_PATH" >> "$GITHUB_ENV"
 
       - name: Create locked build environment
         run: |
