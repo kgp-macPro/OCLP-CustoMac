@@ -162,7 +162,7 @@ This is **Gate 1 — PASS**.
 
 Current AirportItlwm does not provide a complete native AWDL control/data path. OCLP-CustoMac therefore does not claim reliable Intel support for bidirectional AirDrop, Personal Hotspot, or Continuity Camera. Those limitations belong to the external runtime driver, not to OCLP-CustoMac's PCI detection or shared Modern Wireless root patch.
 
-Normal Screen Mirroring works on the validated Broadcom and Intel paths. Some Hackintosh systems independently reproduce an outgoing Hackintosh-to-Apple-receiver black-screen issue; it is separate from OCLP-CustoMac. FeatureUnlock-Tahoe is a validated fallback for affected Broadcom setups, while Intel plus FeatureUnlock-Tahoe remains less reliable and under separate development. Systems with normally working Screen Mirroring do not need FeatureUnlock-Tahoe.
+Normal Screen Mirroring works on the validated Broadcom and Intel paths. Some Hackintosh systems independently reproduce an outgoing Hackintosh-to-Apple-receiver black-screen issue; it is separate from OCLP-CustoMac. [FeatureUnlock-Tahoe](https://github.com/kgp-macPro/FeatureUnlock-Tahoe) is a validated fallback for affected Broadcom setups, while Intel plus [FeatureUnlock-Tahoe](https://github.com/kgp-macPro/FeatureUnlock-Tahoe) remains less reliable and under separate development. Systems with normally working Screen Mirroring do not need [FeatureUnlock-Tahoe](https://github.com/kgp-macPro/FeatureUnlock-Tahoe).
 
 ### Final Broadcom runtime gate
 
