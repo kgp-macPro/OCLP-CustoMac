@@ -1,10 +1,10 @@
 <div align="center">
-<img src="docs/images/OC-Patcher.png" alt="OCLP-CustoMac" width="256" />
+  <img src="docs/images/OC-Patcher.png" alt="OpenCore Patcher Logo" width="256" />
+</div>
 
 # OCLP-CustoMac
 
 ### Focused Modern Wi-Fi and AppleHDA root patching for macOS
-</div>
 
 ---
 

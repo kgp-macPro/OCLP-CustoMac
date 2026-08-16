@@ -30,14 +30,26 @@ class PublicationContractTests(unittest.TestCase):
         )
 
     def test_public_brand_and_technical_identity_boundary(self) -> None:
+        root = Path(__file__).resolve().parents[1]
         current = constants.Constants()
         self.assertEqual(current.patcher_name, "OCLP-CustoMac")
         self.assertEqual(current.project_identity, "OCLP 3.0.0 Nightly - amfipassbeta Edition v2.0")
 
-        spec = (Path(__file__).resolve().parents[1] / "OpenCore-Patcher-GUI.spec").read_text()
+        spec = (root / "OpenCore-Patcher-GUI.spec").read_text()
         self.assertIn('name=\'OpenCore-Patcher.app\'', spec)
         self.assertIn('bundle_identifier="com.dortania.opencore-legacy-patcher"', spec)
         self.assertIn('"CFBundleName": "OCLP-CustoMac"', spec)
+
+        readme = (root / "README.md").read_text(encoding="utf-8")
+        expected_header = """<div align="center">
+  <img src="docs/images/OC-Patcher.png" alt="OpenCore Patcher Logo" width="256" />
+</div>
+
+# OCLP-CustoMac
+
+### Focused Modern Wi-Fi and AppleHDA root patching for macOS"""
+        self.assertTrue(readme.startswith(expected_header))
+        self.assertTrue((root / "docs/images/OC-Patcher.png").is_file())
 
     def test_operational_update_endpoints_target_the_production_repository(self) -> None:
         root = Path(__file__).resolve().parents[1]
