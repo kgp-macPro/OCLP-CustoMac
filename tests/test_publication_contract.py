@@ -61,6 +61,41 @@ class PublicationContractTests(unittest.TestCase):
         for source in (gui_entry, gui_main, gui_about):
             self.assertNotIn("(Nightly)", source)
 
+    def test_user_visible_gui_strings_have_no_development_branding(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        user_visible_sources = [
+            *sorted((root / "opencore_legacy_patcher/wx_gui").glob("*.py")),
+            root / "opencore_legacy_patcher/sys_patch/auto_patcher/start.py",
+            root / "opencore_legacy_patcher/sys_patch/root_state.py",
+        ]
+        combined = "\n".join(path.read_text(encoding="utf-8") for path in user_visible_sources)
+
+        for forbidden in (
+            "KGP v2.0",
+            "KGP v2",
+            "amfipassbeta-v2.0",
+            "OCLP-amfipassbeta-v2.0-development",
+            "Phase 2",
+            "Phase 3",
+            "Phase 4",
+            "Phase 5",
+            "OpenCore Legacy Patcher 3.0.0 (Nightly)",
+            "(Nightly)",
+            "latest nightly build",
+            "nightly update",
+            "falling back to Nightly",
+            'version_label="Nightly"',
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, combined)
+
+        self.assertIn(
+            "Installed metadata predates or is incompatible with the current OCLP-CustoMac metadata format",
+            combined,
+        )
+        self.assertIn('"Install branch build 🧪"', combined)
+        self.assertIn('version_label="Branch Build"', combined)
+
     def test_operational_update_endpoints_target_the_production_repository(self) -> None:
         root = Path(__file__).resolve().parents[1]
         current = constants.Constants()

@@ -194,7 +194,7 @@ class UpdateFrame(wx.Frame):
         if not self.url.endswith(".zip"):
             return
 
-        logging.info("Extracting nightly update")
+        logging.info("Extracting update")
         if Path(self.pkg_download_path).exists():
             subprocess.run(["/bin/rm", "-rf", str(self.pkg_download_path)])
 

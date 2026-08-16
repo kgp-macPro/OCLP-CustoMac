@@ -454,7 +454,7 @@ class RootPatchStateEvaluator:
         if installed.get("Metadata Schema") != ROOT_PATCH_METADATA_SCHEMA:
             return self._result(
                 RootPatchState.LEGACY_FOREIGN,
-                "Installed metadata predates or does not implement the KGP v2.0 exact-build schema; revert, reboot, then repatch",
+                "Installed metadata predates or is incompatible with the current OCLP-CustoMac metadata format; revert, reboot, then repatch",
             )
 
         identity = current_build_identity(self.constants)
@@ -485,7 +485,7 @@ class RootPatchStateEvaluator:
         if installed["Project Identity"] != identity["Project Identity"] or installed["Repository"] != identity["Repository"]:
             return self._result(
                 RootPatchState.LEGACY_FOREIGN,
-                "Installed metadata belongs to a different project or repository; revert, reboot, then patch with KGP v2.0",
+                "Installed metadata belongs to a different project or repository; revert, reboot, then patch with OCLP-CustoMac",
             )
         installed_sha = installed["Commit SHA"]
         if not FULL_SHA_PATTERN.fullmatch(installed_sha):

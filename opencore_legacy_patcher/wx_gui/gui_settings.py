@@ -856,7 +856,7 @@ class SettingsFrame(wx.Frame):
                 "Validation": {
                     "type": "title",
                 },
-                "Install latest nightly build 🧪": {
+                "Install branch build 🧪": {
                     "type": "button",
                     "function": self.on_nightly,
                     "description": [
@@ -1362,7 +1362,7 @@ Hardware Information:
             global_constants=self.constants,
             screen_location=self.parent.GetPosition(),
             url=f"https://nightly.link/kgp-macPro/OCLP-CustoMac/workflows/build-app-wxpython/{branch}/OpenCore-Patcher.pkg.zip",
-            version_label="Nightly"
+            version_label="Branch Build"
         )
 
 

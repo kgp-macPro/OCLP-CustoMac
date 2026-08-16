@@ -419,7 +419,7 @@ class macOSInstallerFlashFrame(wx.Frame):
         """
         link = self.constants.installer_pkg_url
         if network_handler.NetworkUtilities(link).validate_link() is False:
-            logging.info("Stock Install.pkg is missing on Github, falling back to Nightly")
+            logging.info("Stock Install.pkg is missing on Github, falling back to CI build artifact")
             link = self.constants.installer_pkg_url_nightly
 
         if link.endswith(".zip"):
