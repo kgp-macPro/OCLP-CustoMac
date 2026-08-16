@@ -106,9 +106,9 @@ This does not disable Gatekeeper system-wide. It removes quarantine metadata onl
 ## Release Candidate SHA-256
 
 ```text
-OpenCore-Patcher.pkg:             TO-BE-FILLED-AFTER-RC-BUILD
-OpenCore-Patcher-Uninstaller.pkg: TO-BE-FILLED-AFTER-RC-BUILD
-OpenCore-Patcher.app:             TO-BE-FILLED-AFTER-RC-BUILD
+OpenCore-Patcher.pkg:             fbc1ee923a0d1789c326d172129637da2e98b09851285077c1130ffe6d1741b9
+OpenCore-Patcher-Uninstaller.pkg: 9bae46efff4f25f4215888b6bac0477022a409321618ddc5b3da3fe372a788f2
+OpenCore-Patcher.app tree manifest: 91c29ccfe765d307966a79dcbbb1cc0152f44be4e1e4e13e797c7461abad583c
 payloads.dmg:                     082de073e0d103d7bd4b47852007f2b6ab360eda5b4737a089cf3b34a3910f91
 Universal-Binaries.dmg:           3659ae0ebadc1062252bbeeb7fe75dce292b5b9d599681c6dfa3dc4430bbc6a4
 ```
