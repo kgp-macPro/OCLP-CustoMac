@@ -30,6 +30,20 @@ AIRPORT_ITLWM_SUPPORTED_IDS = frozenset(
     """.split()
 )
 
+EXPERIMENTAL_INTEL_WIFI_IDS = frozenset({
+    0x272B,
+    0xA840,
+    0x7740,
+    0x4D40,
+    0xE440,
+    0xE340,
+    0xD340,
+    0x6E70,
+    0xD240,
+})
+
+FINAL_INTEL_MODERN_WIFI_IDS = AIRPORT_ITLWM_SUPPORTED_IDS | EXPERIMENTAL_INTEL_WIFI_IDS
+
 
 def _intel(device_id: int) -> device_probe.IntelWirelessCard:
     return device_probe.IntelWirelessCard(
@@ -65,11 +79,43 @@ class Phase5IntelModernWirelessTests(unittest.TestCase):
         self.assertEqual(len(AIRPORT_ITLWM_SUPPORTED_IDS), 87)
         self.assertEqual(pci_data.intel_wireless_ids.AirportItlwm, AIRPORT_ITLWM_SUPPORTED_IDS)
 
+    def test_experimental_dataset_exactly_matches_audited_bz_sc_transports(self) -> None:
+        self.assertEqual(len(EXPERIMENTAL_INTEL_WIFI_IDS), 9)
+        self.assertEqual(pci_data.intel_wireless_ids.Experimental, EXPERIMENTAL_INTEL_WIFI_IDS)
+        self.assertTrue(AIRPORT_ITLWM_SUPPORTED_IDS.isdisjoint(EXPERIMENTAL_INTEL_WIFI_IDS))
+        self.assertEqual(len(AIRPORT_ITLWM_SUPPORTED_IDS | EXPERIMENTAL_INTEL_WIFI_IDS), 96)
+
+    def test_final_detector_composition_is_frozen(self) -> None:
+        actual = (
+            pci_data.intel_wireless_ids.AirportItlwm
+            | pci_data.intel_wireless_ids.Experimental
+        )
+        self.assertEqual(actual, FINAL_INTEL_MODERN_WIFI_IDS)
+        self.assertEqual(len(actual), 96)
+        self.assertTrue(EXPERIMENTAL_INTEL_WIFI_IDS.issubset(actual))
+        self.assertTrue(AIRPORT_ITLWM_SUPPORTED_IDS.issubset(actual))
+        self.assertTrue({0x0885, 0x0886}.isdisjoint(actual))
+
     def test_every_airportitlwm_supported_intel_id_is_applicable(self) -> None:
         for device_id in sorted(AIRPORT_ITLWM_SUPPORTED_IDS):
             with self.subTest(device_id=f"{device_id:04X}"):
                 wifi = _intel(device_id)
                 self.assertEqual(wifi.chipset, device_probe.IntelWirelessCard.Chipsets.AirportItlwm)
+                self.assertEqual(
+                    wifi.detection_class,
+                    device_probe.IntelWirelessCard.DetectionClass.AirportItlwm,
+                )
+                self.assertTrue(_patchset(wifi).present())
+
+    def test_every_experimental_intel_id_is_applicable(self) -> None:
+        for device_id in sorted(EXPERIMENTAL_INTEL_WIFI_IDS):
+            with self.subTest(device_id=f"{device_id:04X}"):
+                wifi = _intel(device_id)
+                self.assertEqual(wifi.chipset, device_probe.IntelWirelessCard.Chipsets.AirportItlwm)
+                self.assertEqual(
+                    wifi.detection_class,
+                    device_probe.IntelWirelessCard.DetectionClass.Experimental,
+                )
                 self.assertTrue(_patchset(wifi).present())
 
     def test_representative_generations_and_ax210_are_applicable(self) -> None:
@@ -88,11 +134,35 @@ class Phase5IntelModernWirelessTests(unittest.TestCase):
                 self.assertTrue(_patchset(_intel(device_id)).present())
 
     def test_unsupported_intel_ids_are_not_applicable(self) -> None:
-        for device_id in (0x0885, 0x0886, 0x272B, 0xFFFF):
+        for device_id in (0x0885, 0x0886, 0xFFFF):
             with self.subTest(device_id=f"{device_id:04X}"):
                 wifi = _intel(device_id)
                 self.assertEqual(wifi.chipset, device_probe.IntelWirelessCard.Chipsets.Unknown)
+                self.assertEqual(
+                    wifi.detection_class,
+                    device_probe.IntelWirelessCard.DetectionClass.Unknown,
+                )
                 self.assertFalse(_patchset(wifi).present())
+
+    def test_wifi7_development_families_are_covered_without_interface_filtering(self) -> None:
+        # PCIe BE200/BE202 share 272B and are distinguished by subsystem ID.
+        # Integrated BE201/BE211/BE213 use BZ/SC host IDs and RF identity;
+        # CNVio generation is intentionally not an applicability gate here.
+        representatives = {
+            "BE200/BE202 PCIe": 0x272B,
+            "BE201 CNVio3 BZ": 0xA840,
+            "BE201 CNVio3 BZ alternate": 0x7740,
+            "BE211/BE213 CNVio3 BZ": 0x4D40,
+            "BE211/BE213 CNVio3 SC": 0xE440,
+        }
+        for family, device_id in representatives.items():
+            with self.subTest(family=family, device_id=f"{device_id:04X}"):
+                wifi = _intel(device_id)
+                self.assertEqual(
+                    wifi.detection_class,
+                    device_probe.IntelWirelessCard.DetectionClass.Experimental,
+                )
+                self.assertTrue(_patchset(wifi).present())
 
     def test_non_intel_device_with_overlapping_id_is_not_intel(self) -> None:
         wifi = _broadcom(device_id=0x2725, chipset=device_probe.Broadcom.Chipsets.Unknown)
@@ -144,6 +214,38 @@ class Phase5IntelModernWirelessTests(unittest.TestCase):
         self.assertEqual(release.call_count, 2)
         log.assert_called_once_with("- Detected supported Intel Modern Wireless device: 8086:2725")
 
+    def test_probe_logs_experimental_intel_identity_concisely(self) -> None:
+        intel_entry = object()
+        intel_raw = device_probe.PCIDevice(0x8086, 0x272B, 0x028000)
+        intel = _intel(0x272B)
+        computer = device_probe.Computer()
+
+        with mock.patch.object(
+            device_probe.ioreg,
+            "IOServiceGetMatchingServices",
+            return_value=(None, object()),
+        ), mock.patch.object(
+            device_probe.ioreg,
+            "ioiterator_to_list",
+            return_value=[intel_entry],
+        ), mock.patch.object(
+            device_probe.PCIDevice,
+            "from_ioregistry",
+            return_value=intel_raw,
+        ), mock.patch.object(
+            device_probe.IntelWirelessCard,
+            "from_ioregistry",
+            return_value=intel,
+        ), mock.patch.object(
+            device_probe.ioreg,
+            "IOObjectRelease",
+        ), mock.patch.object(device_probe.logging, "info") as log:
+            computer.wifi_probe()
+
+        self.assertEqual(computer.wifi_devices, [intel])
+        self.assertIs(computer.wifi, intel)
+        log.assert_called_once_with("- Detected experimental Intel Modern Wireless device: 8086:272B")
+
     def test_broadcom_intel_inventory_matrix_uses_one_shared_patchset(self) -> None:
         broadcom = _broadcom()
         intel = _intel(0x2725)
@@ -163,10 +265,20 @@ class Phase5IntelModernWirelessTests(unittest.TestCase):
     def test_intel_and_broadcom_share_identical_payload_dictionary(self) -> None:
         self.assertEqual(_patchset(_intel(0x2725)).patches(), _patchset(_broadcom()).patches())
 
+        for device_id in sorted(EXPERIMENTAL_INTEL_WIFI_IDS):
+            with self.subTest(device_id=f"{device_id:04X}"):
+                self.assertEqual(_patchset(_intel(device_id)).patches(), _patchset(_broadcom()).patches())
+
     def test_intel_wifi_only_does_not_require_a_kdk(self) -> None:
         patchset = _patchset(_intel(0x2725))
         self.assertTrue(patchset.present())
         self.assertFalse(patchset.requires_kernel_debug_kit())
+
+        for device_id in sorted(EXPERIMENTAL_INTEL_WIFI_IDS):
+            with self.subTest(device_id=f"{device_id:04X}"):
+                experimental = _patchset(_intel(device_id))
+                self.assertTrue(experimental.present())
+                self.assertFalse(experimental.requires_kernel_debug_kit())
 
     def test_intel_applicability_defaults_existing_modern_wifi_selection_on(self) -> None:
         patchset = _patchset(_intel(0x2725))

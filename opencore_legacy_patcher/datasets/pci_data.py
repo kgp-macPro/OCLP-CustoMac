@@ -1220,7 +1220,7 @@ class broadcom_ids:
 
 
 class intel_wireless_ids:
-    """Intel devices exposed by the audited AirportItlwm IOKit personality."""
+    """Intel devices eligible for the shared Modern Wireless root patch."""
 
     AirportItlwm = frozenset({
         # iwx: Wi-Fi 6 / Wi-Fi 6E PCI and CNVi families
@@ -1242,6 +1242,22 @@ class intel_wireless_ids:
         0x0084, 0x0085, 0x0087, 0x0089, 0x008A, 0x008B, 0x0090, 0x0091,
         0x0892, 0x0893, 0x0894, 0x0895, 0x0896, 0x0897, 0x08AE, 0x08AF,
         0x088E, 0x088F, 0x0890, 0x0891, 0x0887, 0x0888,
+    })
+
+    # Intel BZ/SC development transports positively identified in upstream
+    # iwlwifi. These are applicability-only: runtime support still depends on
+    # a compatible external AirportItlwm build. Marketing SKUs for integrated
+    # devices additionally depend on subsystem/RF identity.
+    Experimental = frozenset({
+        0x272B,  # Discrete BZ: BE200/BE202 and Killer/OEM derivatives
+        0xA840,  # Integrated BZ host
+        0x7740,  # Integrated BZ host
+        0x4D40,  # Integrated BZ host
+        0xE440,  # Integrated SC host
+        0xE340,  # Integrated SC host
+        0xD340,  # Integrated SC host
+        0x6E70,  # Integrated SC host
+        0xD240,  # Integrated SC host
     })
 
 

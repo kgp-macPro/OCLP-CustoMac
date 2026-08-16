@@ -578,13 +578,26 @@ class IntelWirelessCard(WirelessCard):
         AirportItlwm = "AirportItlwm supported"
         Unknown = "Unknown"
 
+    class DetectionClass(enum.Enum):
+        AirportItlwm = "Current AirportItlwm matcher"
+        Experimental = "Experimental/development"
+        Unknown = "Unknown"
+
     chipset: Chipsets = field(init=False)
+    detection_class: DetectionClass = field(init=False)
 
     def detect_chipset(self):
         if self.device_id in pci_data.intel_wireless_ids.AirportItlwm:
             self.chipset = IntelWirelessCard.Chipsets.AirportItlwm
+            self.detection_class = IntelWirelessCard.DetectionClass.AirportItlwm
+        elif self.device_id in pci_data.intel_wireless_ids.Experimental:
+            # Reuse the existing shared Modern Wireless applicability path.
+            # This does not claim that stock AirportItlwm can bind the device.
+            self.chipset = IntelWirelessCard.Chipsets.AirportItlwm
+            self.detection_class = IntelWirelessCard.DetectionClass.Experimental
         else:
             self.chipset = IntelWirelessCard.Chipsets.Unknown
+            self.detection_class = IntelWirelessCard.DetectionClass.Unknown
 
 
 @dataclass
@@ -769,8 +782,13 @@ class Computer:
                     isinstance(detected_wifi, IntelWirelessCard)
                     and detected_wifi.chipset == IntelWirelessCard.Chipsets.AirportItlwm
                 ):
+                    detection_label = (
+                        "experimental "
+                        if detected_wifi.detection_class == IntelWirelessCard.DetectionClass.Experimental
+                        else "supported "
+                    )
                     logging.info(
-                        f"- Detected supported Intel Modern Wireless device: "
+                        f"- Detected {detection_label}Intel Modern Wireless device: "
                         f"{detected_wifi.vendor_id:04X}:{detected_wifi.device_id:04X}"
                     )
 
