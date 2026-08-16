@@ -15,7 +15,7 @@ from . import network_handler
 from .. import constants
 
 
-REPO_LATEST_RELEASE_URL: str = "https://api.github.com/repos/dortania/OpenCore-Legacy-Patcher/releases/latest"
+REPO_LATEST_RELEASE_URL: str = "https://api.github.com/repos/kgp-macPro/OCLP-lzhoang2801-amfipassbeta/releases/latest"
 
 
 class CheckBinaryUpdates:
@@ -121,7 +121,7 @@ class CheckBinaryUpdates:
                     "Name": asset["name"],
                     "Version": latest_remote_version,
                     "Link": asset["browser_download_url"],
-                    "Github Link": f"https://github.com/dortania/OpenCore-Legacy-Patcher/releases/{latest_remote_version}",
+                    "Github Link": f"{self.constants.repo_link}/releases/tag/{latest_remote_version}",
                 }
                 return self.latest_details
 

@@ -24,7 +24,7 @@ def main() -> None:
     Parse Command Line Arguments
     """
 
-    parser = argparse.ArgumentParser(description="Build OpenCore Legacy Patcher Suite", add_help=False)
+    parser = argparse.ArgumentParser(description="Build OCLP-CustoMac Suite", add_help=False)
 
     # Signing Parameters
     parser.add_argument("--application-signing-identity", type=str, help="Application Signing Identity")

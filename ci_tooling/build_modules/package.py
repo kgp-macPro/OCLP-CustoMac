@@ -36,11 +36,11 @@ class GeneratePackage:
         _welcome = ""
 
         _welcome += "# Overview\n"
-        _welcome += f"This package will install the OpenCore Legacy Patcher application (v{constants.Constants().patcher_version}) on your system."
+        _welcome += f"This package will install the {constants.Constants().patcher_name} application (v{constants.Constants().patcher_version}) on your system."
 
-        _welcome += "\n\nAdditionally, a shortcut for OpenCore Legacy Patcher will be added in the '/Applications' folder."
-        _welcome += "\n\nThis package will not 'Build and Install OpenCore' or install any 'Root Patches' on your machine. If required, you can run OpenCore Legacy Patcher to install any patches you may need."
-        _welcome += f"\n\nFor more information on OpenCore Legacy Patcher usage, see our [documentation]({constants.Constants().guide_link}) and [GitHub repository]({constants.Constants().repo_link})."
+        _welcome += f"\n\nAdditionally, a shortcut for {constants.Constants().patcher_name} will be added in the '/Applications' folder."
+        _welcome += f"\n\nThis package will not 'Build and Install OpenCore' or install any 'Root Patches' on your machine. If required, you can run {constants.Constants().patcher_name} to install any patches you may need."
+        _welcome += f"\n\nFor more information on {constants.Constants().patcher_name} usage, see our [documentation]({constants.Constants().guide_link}) and [GitHub repository]({constants.Constants().repo_link})."
         _welcome += "\n\n"
 
         _welcome += "## Files Installed"
@@ -58,11 +58,11 @@ class GeneratePackage:
         _welcome = ""
 
         _welcome += "# Application Uninstaller\n"
-        _welcome += "This package will uninstall the OpenCore Legacy Patcher application and its Privileged Helper Tool from your system."
+        _welcome += f"This package will uninstall the {constants.Constants().patcher_name} application and its Privileged Helper Tool from your system."
         _welcome += "\n\n"
-        _welcome += "This will not remove any root patches or OpenCore configurations that you may have installed using OpenCore Legacy Patcher."
+        _welcome += f"This will not remove any root patches or OpenCore configurations that you may have installed using {constants.Constants().patcher_name}."
         _welcome += "\n\n"
-        _welcome += f"For more information on OpenCore Legacy Patcher, see our [documentation]({constants.Constants().guide_link}) and [GitHub repository]({constants.Constants().repo_link})."
+        _welcome += f"For more information on {constants.Constants().patcher_name}, see our [documentation]({constants.Constants().guide_link}) and [GitHub repository]({constants.Constants().repo_link})."
 
         return _welcome
 
@@ -76,7 +76,7 @@ class GeneratePackage:
         _welcome += "# DO NOT RUN AUTOPKG-ASSETS MANUALLY!\n\n"
         _welcome += "## THIS CAN BREAK YOUR SYSTEM'S INSTALL!\n\n"
         _welcome += "This package should only ever be invoked by the Patcher itself, never downloaded or run by the user. Download the OpenCore-Patcher.pkg on the Github Repository.\n\n"
-        _welcome += f"[OpenCore Legacy Patcher GitHub Release]({constants.Constants().repo_link})"
+        _welcome += f"[{constants.Constants().patcher_name} GitHub Release]({constants.Constants().repo_link})"
 
         return _welcome
 
@@ -97,7 +97,7 @@ class GeneratePackage:
             pkg_background="./ci_tooling/pkg_assets/PkgBackground-Uninstaller.png",
             pkg_preinstall_script=_tmp_uninstall.name,
             pkg_as_distribution=True,
-            pkg_title="OpenCore Legacy Patcher Uninstaller",
+            pkg_title=f"{constants.Constants().patcher_name} Uninstaller",
             pkg_welcome=self._generate_uninstaller_welcome(),
         ).build() is True
 
@@ -120,7 +120,7 @@ class GeneratePackage:
             pkg_preinstall_script=_tmp_pkg_preinstall.name,
             pkg_postinstall_script=_tmp_pkg_postinstall.name,
             pkg_file_structure=self._files,
-            pkg_title="OpenCore Legacy Patcher",
+            pkg_title=constants.Constants().patcher_name,
             pkg_welcome=self._generate_installer_welcome(),
         ).build() is True
 

@@ -116,7 +116,7 @@ class UpdateFrame(wx.Frame):
         if download_obj.download_complete is False:
             progress_bar_animation.stop_pulse()
             progress_bar.SetValue(0)
-            wx.MessageBox("Failed to download update. If you continue to have this issue, please manually download OpenCore Legacy Patcher off Github", "Critical Error!", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(f"Failed to download update. If you continue to have this issue, please manually download {self.constants.patcher_name} from GitHub", "Critical Error!", wx.OK | wx.ICON_ERROR)
             sys.exit(1)
 
         # Title: Extracting update

@@ -142,7 +142,7 @@ class PatcherSupportPkgMount:
         try:
             password = applescript.AppleScript(
                 f"""
-                set theResult to display dialog "{msg}" default answer "" with hidden answer with title "OpenCore Legacy Patcher" with icon file "{self.icon_path}"
+                set theResult to display dialog "{msg}" default answer "" with hidden answer with title "{self.constants.patcher_name}" with icon file "{self.icon_path}"
 
                 return the text returned of theResult
                 """
@@ -160,7 +160,7 @@ class PatcherSupportPkgMount:
         try:
             applescript.AppleScript(
                 f"""
-                display dialog "Failed to mount DortaniaInternal resources, please file an internal radar." with title "OpenCore Legacy Patcher" with icon file "{self.icon_path}"
+                display dialog "Failed to mount DortaniaInternal resources, please file an internal radar." with title "{self.constants.patcher_name}" with icon file "{self.icon_path}"
                 """
             ).run()
         except Exception as e:
@@ -174,7 +174,7 @@ class PatcherSupportPkgMount:
         try:
             applescript.AppleScript(
                 f"""
-                display dialog "Failed to mount DortaniaInternal resources, too many incorrect passwords. If this continues with the correct decryption key, please file an internal radar." with title "OpenCore Legacy Patcher" with icon file "{self.icon_path}"
+                display dialog "Failed to mount DortaniaInternal resources, too many incorrect passwords. If this continues with the correct decryption key, please file an internal radar." with title "{self.constants.patcher_name}" with icon file "{self.icon_path}"
                 """
             ).run()
         except Exception as e:
