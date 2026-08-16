@@ -5,14 +5,12 @@ on:
     paths-ignore:
       - 'docs/**'
   workflow_dispatch:
-  release:
-    types: [published]
 
 jobs:
   build:
     name: Build wxPython
     runs-on: macos-15-intel
-    if: github.repository_owner == 'lzhoang2801'
+    if: github.repository == 'kgp-macPro/OCLP-CustoMac'
 
     env:
       PYTHONHASHSEED: '0'
@@ -68,6 +66,12 @@ jobs:
 
       - name: Pin source timestamp
         run: echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
+
+      - name: Validate source and regressions
+        run: |
+          .venv-build/bin/python -m unittest discover -s tests
+          .venv-build/bin/python -m compileall -q opencore_legacy_patcher ci_tooling tests
+          git diff --check
         
       - name: Prepare Assets (--prepare-assets)
         run: >
@@ -89,6 +93,15 @@ jobs:
           --run-as-individual-steps
           --prepare-package
 
+      - name: Validate application and package parity
+        run: |
+          codesign --verify --deep --strict dist/OpenCore-Patcher.app
+          pkgutil --check-signature dist/OpenCore-Patcher.pkg
+          pkgutil --check-signature dist/OpenCore-Patcher-Uninstaller.pkg
+          pkgutil --expand-full dist/OpenCore-Patcher.pkg package-expanded
+          codesign --verify --deep --strict "package-expanded/OpenCore-Patcher.pkg/Payload/Library/Application Support/Dortania/OpenCore-Patcher.app"
+          test -z "$(rsync -ainc --delete --omit-dir-times 'dist/OpenCore-Patcher.app/' 'package-expanded/OpenCore-Patcher.pkg/Payload/Library/Application Support/Dortania/OpenCore-Patcher.app/')"
+
       - name: Upload AutoPkg Package to Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -106,30 +119,3 @@ jobs:
         with:
           name: OpenCore-Patcher-Uninstaller.pkg
           path: ./dist/OpenCore-Patcher-Uninstaller.pkg
-
-      - name: Upload AutoPkg Package to Release
-        if: github.event_name == 'release'
-        uses: svenstaro/upload-release-action@e74ff71f7d8a4c4745b560a485cc5fdb9b5b999d
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ./dist/AutoPkg-Assets.pkg
-          tag: ${{ github.ref }}
-          file_glob: true
-
-      - name: Upload Installation Package to Release
-        if: github.event_name == 'release'
-        uses: svenstaro/upload-release-action@e74ff71f7d8a4c4745b560a485cc5fdb9b5b999d
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ./dist/OpenCore-Patcher.pkg
-          tag: ${{ github.ref }}
-          file_glob: true
-
-      - name: Upload Uninstaller Package to Release
-        if: github.event_name == 'release'
-        uses: svenstaro/upload-release-action@e74ff71f7d8a4c4745b560a485cc5fdb9b5b999d
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ./dist/OpenCore-Patcher-Uninstaller.pkg
-          tag: ${{ github.ref }}
-          file_glob: true

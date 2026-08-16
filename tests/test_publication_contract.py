@@ -103,6 +103,31 @@ class PublicationContractTests(unittest.TestCase):
         }
         self.assertEqual({name: getattr(current, name) for name in expected}, expected)
 
+    def test_normal_ci_is_fail_closed_and_cannot_publish(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        workflows = root / ".github/workflows"
+        build = (workflows / "build-app-wxpython.yml").read_text()
+        validation = (workflows / "validate.yml").read_text()
+        site = (workflows / "build-site.yml").read_text()
+        combined = "\n".join(path.read_text() for path in workflows.glob("*.yml"))
+
+        self.assertIn("github.repository == 'kgp-macPro/OCLP-CustoMac'", build)
+        self.assertIn("python -m unittest discover -s tests", build)
+        self.assertIn("codesign --verify --deep --strict", build)
+        self.assertIn("OpenCore-Patcher.pkg", build)
+        self.assertIn("OpenCore-Patcher-Uninstaller.pkg", build)
+        self.assertIn("python -m unittest discover -s tests", validation)
+        self.assertNotIn("continue-on-error: true", validation)
+        self.assertNotIn("actions/deploy-pages", site)
+        for forbidden in (
+            "upload-release-action",
+            "softprops/action-gh-release",
+            "actions/create-release",
+            "gh release create",
+            "git push",
+        ):
+            self.assertNotIn(forbidden, combined)
+
 
 if __name__ == "__main__":
     unittest.main()

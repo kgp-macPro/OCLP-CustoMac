@@ -2,17 +2,17 @@ name: CI - Validation (External)
 
 on:
   push:
-    paths-ignore: 
-      - 'docs/**'
   workflow_dispatch:
-  release:
-    types: [published]
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     name: Validate
     runs-on: macos-15-intel
-    if: github.repository_owner != 'dortania'
+    if: github.repository != 'kgp-macPro/OCLP-CustoMac'
     env:
       PYTHONHASHSEED: '0'
     steps:
@@ -27,6 +27,9 @@ jobs:
           python3 -m venv .venv-build
           PIP_CONFIG_FILE=/dev/null .venv-build/bin/python -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes --index-url https://pypi.org/simple -r requirements-lock.txt
           .venv-build/bin/python -m ci_tooling.build_environment --validation-only
-      - name: Validate
-        run: .venv-build/bin/python OpenCore-Patcher-GUI.command --validate
-        continue-on-error: true
+      - name: Run complete regression suite
+        run: .venv-build/bin/python -m unittest discover -s tests
+      - name: Compile validation
+        run: .venv-build/bin/python -m compileall -q opencore_legacy_patcher ci_tooling tests
+      - name: Source whitespace validation
+        run: git diff --check
