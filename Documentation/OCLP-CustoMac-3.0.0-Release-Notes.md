@@ -1,5 +1,3 @@
-# OCLP-CustoMac 3.0.0 — macOS Tahoe
-
 OCLP-CustoMac 3.0.0 is the first public release of the focused OCLP-CustoMac branch for macOS Tahoe 26.x / Darwin 25.
 
 This release passed complete automated validation, real GitHub CI, and final physical runtime validation with Intel AX210 and Broadcom BCM943602CDP.
