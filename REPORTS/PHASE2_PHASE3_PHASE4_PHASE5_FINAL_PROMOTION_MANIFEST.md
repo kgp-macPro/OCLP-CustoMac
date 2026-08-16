@@ -27,6 +27,7 @@ Detailed supporting authorities remain:
 - `REPORTS/PHASE5_INTEL_MODERN_WIFI_DEVICE_SUPPORT_AUDIT.md`
 - `REPORTS/PHASE5_INTEL_MODERN_WIFI_IMPLEMENTATION.md`
 - `REPORTS/PHASE5_RUNTIME_VALIDATION_FINAL.md`
+- `REPORTS/OCLP_CUSTOMAC_3.0.0_RC_RUNTIME_VALIDATION.md`
 
 ## Phase 2 and Phase 3 — mandatory promoted behavior
 
@@ -155,6 +156,15 @@ Keep the evidence classes separate:
 - **Screen Mirroring:** unreliable except for one successful attempt; remains a FeatureUnlock/Tahoe research observation, not Phase-5 acceptance or promoted work.
 
 Captured AX210 properties included `vendor-id <86 80 00 00>`, `device-id <25 27 00 00>`, `IOName pci8086,2725`, and class code `0x028000`. Apple-style `AirPort Extreme`/`ARPT` naming coexisted with the directly visible Intel identity. Eligibility remains a numeric vendor/device decision, not a service/display-name predicate.
+
+## Final OCLP-CustoMac 3.0.0 RC hardware gates
+
+The current final RC was built from `6ef78041577bd00ef4d7b5aabe215ff969e4c8de`; its `OpenCore-Patcher.pkg` SHA-256 is `69a745c4dbb92a493c1562c717a0b426364a624dbcc19f54ee0aa92d67595fda`.
+
+- **Gate 1 — Intel AX210: PASS.** KGP reverted the existing root patches, returned to CLEAN, completed root patching with the final RC, and rebooted to passing AppleHDA, Intel Wi-Fi, bidirectional AirPlay, and bidirectional normal Apple Screen Mirroring.
+- **Gate 2 — Broadcom BCM943602CDP: PENDING.** Publication remains blocked until this physical control gate passes.
+
+The final-RC Screen Mirroring result supplements rather than rewrites the earlier Phase-5 artifact's evidence boundary. It does not broaden Intel AirportItlwm claims for reliable bidirectional AirDrop, Personal Hotspot, or Continuity Camera.
 
 ## Approaches explicitly not for promotion
 

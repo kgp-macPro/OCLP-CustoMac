@@ -151,12 +151,14 @@ Do not blindly remove an existing historical EFI property merely because OCLP-Cu
 
 ### Validated Intel runtime status
 
-With Intel AX210 (`8086:2725`) and an external AirportItlwm EFI, KGP validated:
+With Intel AX210 (`8086:2725`) and an external AirportItlwm EFI, KGP validated the final pre-publication RC after the GUI-branding cleanup:
 
 - Wi-Fi — working;
 - AppleHDA — working;
-- AirPlay — working;
-- normal Apple Screen Mirroring path — working.
+- AirPlay — working bidirectionally;
+- normal Apple Screen Mirroring path — working bidirectionally.
+
+This is **Gate 1 — PASS**. Publication remains gated on **Gate 2 — Broadcom BCM943602CDP**.
 
 Current AirportItlwm does not provide a complete native AWDL control/data path. OCLP-CustoMac therefore does not claim reliable Intel support for bidirectional AirDrop, Personal Hotspot, or Continuity Camera. Those limitations belong to the external runtime driver, not to OCLP-CustoMac's PCI detection or shared Modern Wireless root patch.
 
