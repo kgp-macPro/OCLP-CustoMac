@@ -199,6 +199,16 @@ The first public presentation must include:
 - the current AppleVTD limitation and `DisableIoMapper=true` validation boundary;
 - project-development, AI-assistance, upstream, and community attribution.
 
+The three editions have separate permanent repository homes:
+
+- Preserved Reference Edition: `kgp-macPro/OCLP-lzhoang2801`;
+- amfipassbeta Edition: `kgp-macPro/OCLP-lzhoang2801-amfipassbeta`;
+- OCLP-CustoMac: `kgp-macPro/OCLP-CustoMac`.
+
+OCLP-CustoMac must be promoted through its own ancestry-preserving repository.
+The existing amfipassbeta repository, history, tag, and releases are not rename
+or replacement targets.
+
 User-visible application, About, log/dialog, and installer presentation may use `OCLP-CustoMac`. Promotion must retain the technical `OpenCore-Patcher.app`, `OpenCore-Patcher.pkg`, `OpenCore-Patcher-Uninstaller.pkg`, bundle/package/helper/launch identifiers, installed paths, preference domains, root metadata keys, lifecycle paths, and the historical project identity required for compatibility.
 
 The permanent `tests/test_publication_contract.py` regression must assert:
@@ -207,4 +217,4 @@ The permanent `tests/test_publication_contract.py` regression must assert:
 - the public display name and technical identity boundary remain intact;
 - the published component baseline remains synchronized with source.
 
-Online repository rename, updater/release URL changes, `v3.0.0` tag creation, and GitHub Release creation remain separate explicitly authorized actions after the Intel and Broadcom release-candidate hardware gates.
+Creation/push of the dedicated online OCLP-CustoMac repository, `v3.0.0` tag creation, and GitHub Release creation remain separate explicitly authorized actions after the Intel and Broadcom release-candidate hardware gates. The source already carries coordinated OCLP-CustoMac updater/release endpoints for that future dedicated repository.

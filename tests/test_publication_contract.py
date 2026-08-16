@@ -64,8 +64,12 @@ class PublicationContractTests(unittest.TestCase):
     def test_operational_update_endpoints_target_the_production_repository(self) -> None:
         root = Path(__file__).resolve().parents[1]
         current = constants.Constants()
-        expected_repo = "https://github.com/kgp-macPro/OCLP-lzhoang2801-amfipassbeta"
+        expected_repo = "https://github.com/kgp-macPro/OCLP-CustoMac"
         self.assertEqual(current.repo_link, expected_repo)
+        self.assertEqual(
+            current.installer_pkg_url,
+            f"{expected_repo}/releases/download/v3.0.0/AutoPkg-Assets.pkg",
+        )
 
         operational_sources = [
             root / "opencore_legacy_patcher/constants.py",
@@ -78,6 +82,7 @@ class PublicationContractTests(unittest.TestCase):
             text = source.read_text(encoding="utf-8")
             self.assertNotIn("api.github.com/repos/dortania/OpenCore-Legacy-Patcher", text)
             self.assertNotIn("nightly.link/dortania/OpenCore-Legacy-Patcher", text)
+            self.assertNotIn("kgp-macPro/OCLP-lzhoang2801-amfipassbeta", text)
 
     def test_component_baseline_is_frozen(self) -> None:
         current = constants.Constants()

@@ -72,9 +72,9 @@ Recovery authorization is separate from authorization to apply another patch. Pa
 
 OCLP-CustoMac does not obsolete the earlier KGP configurations:
 
-1. **OCLP 3.0.0 Nightly – Preserved Reference Edition** — conservative reference closest to the earlier working lzhoang2801 state, complete earlier PatcherSupportPkg, historical `amfi=0x80` / `ipc_control_port_options=0` path.
-2. **OCLP 3.0.0 Nightly – amfipassbeta Edition** — conservative and extensively real-system tested, `AMFIPass.kext + -amfipassbeta`, historically documented Intel Broadcom-`IOName` spoof path; existing users do not need to migrate.
-3. **OCLP-CustoMac** — direct Intel detection, selection controls, AUTO/Manual KDK, strengthened recovery, APFS resources, and reproducible builds.
+1. **[OCLP 3.0.0 Nightly – Preserved Reference Edition](https://github.com/kgp-macPro/OCLP-lzhoang2801)** — conservative reference closest to the earlier working lzhoang2801 state, complete earlier PatcherSupportPkg, historical `amfi=0x80` / `ipc_control_port_options=0` path.
+2. **[OCLP 3.0.0 Nightly – amfipassbeta Edition](https://github.com/kgp-macPro/OCLP-lzhoang2801-amfipassbeta)** — conservative and extensively real-system tested, `AMFIPass.kext + -amfipassbeta`, historically documented Intel Broadcom-`IOName` spoof path; existing users do not need to migrate.
+3. **[OCLP-CustoMac](https://github.com/kgp-macPro/OCLP-CustoMac)** — direct Intel detection, selection controls, AUTO/Manual KDK, strengthened recovery, APFS resources, and reproducible builds.
 
 Migration from the amfipassbeta Edition is optional. A controlled migration is Revert -> reboot CLEAN/sealed -> install OCLP-CustoMac -> retain `AMFIPass.kext + -amfipassbeta` -> select patches -> patch -> reboot. Do not remove historical EFI DeviceProperties without reviewing whether they serve another purpose.
 

@@ -15,7 +15,7 @@ from . import network_handler
 from .. import constants
 
 
-REPO_LATEST_RELEASE_URL: str = "https://api.github.com/repos/kgp-macPro/OCLP-lzhoang2801-amfipassbeta/releases/latest"
+REPO_LATEST_RELEASE_URL: str = "https://api.github.com/repos/kgp-macPro/OCLP-CustoMac/releases/latest"
 
 
 class CheckBinaryUpdates:

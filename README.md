@@ -47,12 +47,16 @@ OCLP-CustoMac does not obsolete or withdraw the two earlier KGP Tahoe configurat
 
 ### 1. OCLP 3.0.0 Nightly – Preserved Reference Edition
 
+Repository: [kgp-macPro/OCLP-lzhoang2801](https://github.com/kgp-macPro/OCLP-lzhoang2801)
+
 - conservative reference environment closest to the earlier working lzhoang2801 OCLP 3.0.0 Nightly Tahoe state;
 - uses the earlier working lzhoang2801 PatcherSupportPkg containing Modern Wireless resources and AppleHDA;
 - retains the historical `amfi=0x80` and `ipc_control_port_options=0` AMFI path;
 - preserved for users who value maximum proximity to the original Nightly architecture.
 
 ### 2. OCLP 3.0.0 Nightly – amfipassbeta Edition
+
+Repository: [kgp-macPro/OCLP-lzhoang2801-amfipassbeta](https://github.com/kgp-macPro/OCLP-lzhoang2801-amfipassbeta)
 
 - conservative and extensively tested on real systems over many months;
 - remains close to the preserved Nightly architecture;
@@ -61,6 +65,8 @@ OCLP-CustoMac does not obsolete or withdraw the two earlier KGP Tahoe configurat
 - remains fully available, and satisfied users do not need to migrate.
 
 ### 3. OCLP-CustoMac
+
+Repository: [kgp-macPro/OCLP-CustoMac](https://github.com/kgp-macPro/OCLP-CustoMac)
 
 - further-developed focused branch with direct Intel detection;
 - does not require a Broadcom `IOName` spoof for Intel detection;

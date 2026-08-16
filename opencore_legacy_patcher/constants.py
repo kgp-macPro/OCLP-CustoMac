@@ -23,9 +23,9 @@ class Constants:
         self.url_patcher_support_pkg:         str = "https://github.com/kgp-macPro/PatcherSupportPkg-laobamac/releases/download/"
         self.discord_link:                    str = "https://discord.gg/rqdPgH8xSN"
         self.guide_link:                      str = "https://dortania.github.io/OpenCore-Legacy-Patcher/"
-        self.repo_link:                       str = "https://github.com/kgp-macPro/OCLP-lzhoang2801-amfipassbeta"
-        self.installer_pkg_url:               str = f"{self.repo_link}/releases/download/{self.patcher_version}/AutoPkg-Assets.pkg"
-        self.installer_pkg_url_nightly:       str = "https://nightly.link/kgp-macPro/OCLP-lzhoang2801-amfipassbeta/workflows/build-app-wxpython/main/AutoPkg-Assets.pkg.zip"
+        self.repo_link:                       str = "https://github.com/kgp-macPro/OCLP-CustoMac"
+        self.installer_pkg_url:               str = f"{self.repo_link}/releases/download/v{self.patcher_version}/AutoPkg-Assets.pkg"
+        self.installer_pkg_url_nightly:       str = "https://nightly.link/kgp-macPro/OCLP-CustoMac/workflows/build-app-wxpython/main/AutoPkg-Assets.pkg.zip"
 
         # OpenCore Versioning
         # https://github.com/acidanthera/OpenCorePkg

@@ -325,7 +325,7 @@ class MainFrame(wx.Frame):
         ID_GITHUB = wx.NewId()
         ID_UPDATE = wx.NewId()
 
-        url = "https://api.github.com/repos/kgp-macPro/OCLP-lzhoang2801-amfipassbeta/releases/latest"
+        url = "https://api.github.com/repos/kgp-macPro/OCLP-CustoMac/releases/latest"
         response = requests.get(url).json()
         try:
             changelog = response["body"].split("## Asset Information")[0]

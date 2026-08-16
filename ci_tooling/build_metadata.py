@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-CANONICAL_REPOSITORY_URL = "https://github.com/kgp-macPro/OCLP-lzhoang2801-amfipassbeta"
+CANONICAL_REPOSITORY_URL = "https://github.com/kgp-macPro/OCLP-CustoMac"
 FULL_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
