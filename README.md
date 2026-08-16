@@ -344,7 +344,7 @@ Repository, release, updater, and support URLs will be updated together during t
 
 ## Project Development & Research
 
-**KGP / kgp-macPro** — Project lead; OCLP-CustoMac concept and architecture; experimental design; Tahoe patch-environment preservation and development; Broadcom and Intel hardware integration; hardware, operating-system, and multi-build runtime validation; evidence collection; technical review; and publication.
+**[KGP / kgp-macPro](https://github.com/kgp-macPro)** — Project lead; OCLP-CustoMac concept and architecture; experimental design; Tahoe patch-environment preservation and development; Broadcom and Intel hardware integration; hardware, operating-system, and multi-build runtime validation; evidence collection; technical review; and publication.
 
 **ChatGPT by OpenAI** — Technical research and reasoning partner for evidence analysis, hypothesis refinement, architecture and experiment planning, runtime-result interpretation, safety-boundary development, technical review, and documentation development.
 
@@ -359,13 +359,15 @@ Repository, release, updater, and support URLs will be updated together during t
 - [lzhoang2801](https://github.com/lzhoang2801)
 - [laobamac](https://github.com/laobamac) — OCLP-Mod and PatcherSupportPkg preservation; important comparative/reference implementation during the audits
 - [YBronst](https://github.com/YBronst) — OCLP-Plus; important comparative/reference implementation during the audits
-- [zxystd / OpenIntelWireless](https://github.com/OpenIntelWireless)
+- [zxystd](https://github.com/zxystd) / [OpenIntelWireless](https://github.com/OpenIntelWireless)
 - [lshbluesky](https://github.com/lshbluesky)
 - [Vinhts](https://github.com/Vinhts)
 - [Z3c0ld](https://github.com/Z3c0ld)
 - badbrain
 - [InsanelyMac community](https://www.insanelymac.com/)
 - [tonymacx86 community](https://www.tonymacx86.com/)
+
+For the complete upstream contributor history, see the original [Dortania OpenCore Legacy Patcher repository](https://github.com/dortania/OpenCore-Legacy-Patcher).
 
 OCLP-CustoMac is an unofficial independent project. It is not supported or endorsed by the Dortania OCLP Team, Apple, Intel, Broadcom, or OpenAI. Attribution above does not imply authorship by KGP of upstream work.
 
