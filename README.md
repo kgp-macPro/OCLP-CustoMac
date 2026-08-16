@@ -158,11 +158,19 @@ With Intel AX210 (`8086:2725`) and an external AirportItlwm EFI, KGP validated t
 - AirPlay — working bidirectionally;
 - normal Apple Screen Mirroring path — working bidirectionally.
 
-This is **Gate 1 — PASS**. Publication remains gated on **Gate 2 — Broadcom BCM943602CDP**.
+This is **Gate 1 — PASS**.
 
 Current AirportItlwm does not provide a complete native AWDL control/data path. OCLP-CustoMac therefore does not claim reliable Intel support for bidirectional AirDrop, Personal Hotspot, or Continuity Camera. Those limitations belong to the external runtime driver, not to OCLP-CustoMac's PCI detection or shared Modern Wireless root patch.
 
 Normal Screen Mirroring works on the validated Broadcom and Intel paths. Some Hackintosh systems independently reproduce an outgoing Hackintosh-to-Apple-receiver black-screen issue; it is separate from OCLP-CustoMac. FeatureUnlock-Tahoe is a validated fallback for affected Broadcom setups, while Intel plus FeatureUnlock-Tahoe remains less reliable and under separate development. Systems with normally working Screen Mirroring do not need FeatureUnlock-Tahoe.
+
+### Final Broadcom runtime gate
+
+After Gate 1, KGP physically replaced AX210 with BCM943602CDP and retained the already-installed final-RC Modern Wireless / Modern Audio root-patch snapshot. Root patches were not reverted or reapplied for the adapter change. AppleHDA, Broadcom Wi-Fi, bidirectional AirDrop, bidirectional AirPlay, bidirectional normal Apple Screen Mirroring, Continuity Camera, and Personal Hotspot all worked immediately after boot.
+
+This **Gate 2 — PASS** result confirms that the shared Modern Wireless root-patch environment is hardware-neutral between the validated Intel and Broadcom paths. It does not represent a new Broadcom Revert -> CLEAN -> Root Patch cycle; Broadcom detection and patch application were separately runtime validated during development, and the final GUI-branding cleanup changed no related functional code.
+
+**Publication runtime gates: COMPLETE.**
 
 ## Kernel Debug Kit Handling
 

@@ -162,9 +162,11 @@ Captured AX210 properties included `vendor-id <86 80 00 00>`, `device-id <25 27 
 The current final RC was built from `6ef78041577bd00ef4d7b5aabe215ff969e4c8de`; its `OpenCore-Patcher.pkg` SHA-256 is `69a745c4dbb92a493c1562c717a0b426364a624dbcc19f54ee0aa92d67595fda`.
 
 - **Gate 1 — Intel AX210: PASS.** KGP reverted the existing root patches, returned to CLEAN, completed root patching with the final RC, and rebooted to passing AppleHDA, Intel Wi-Fi, bidirectional AirPlay, and bidirectional normal Apple Screen Mirroring.
-- **Gate 2 — Broadcom BCM943602CDP: PENDING.** Publication remains blocked until this physical control gate passes.
+- **Gate 2 — Broadcom BCM943602CDP: PASS.** After Gate 1, KGP replaced AX210 with BCM943602CDP without reverting or reapplying root patches. The retained final-RC Modern Wireless / Modern Audio snapshot delivered passing AppleHDA, Broadcom Wi-Fi, bidirectional AirDrop, bidirectional AirPlay, bidirectional normal Apple Screen Mirroring, Continuity Camera, and Personal Hotspot.
 
-The final-RC Screen Mirroring result supplements rather than rewrites the earlier Phase-5 artifact's evidence boundary. It does not broaden Intel AirportItlwm claims for reliable bidirectional AirDrop, Personal Hotspot, or Continuity Camera.
+Gate 2 proves Broadcom runtime operation and shared-root-payload independence on the already-installed final-RC snapshot. It does not claim that this final gate included a new Broadcom Revert -> CLEAN -> Root Patch cycle; the Broadcom application path was independently validated earlier, and the GUI-branding cleanup changed no relevant functional code.
+
+**Publication runtime gates: COMPLETE.** The final-RC Intel Screen Mirroring result supplements rather than rewrites the earlier Phase-5 artifact's evidence boundary. It does not broaden Intel AirportItlwm claims for reliable bidirectional AirDrop, Personal Hotspot, or Continuity Camera.
 
 ## Approaches explicitly not for promotion
 

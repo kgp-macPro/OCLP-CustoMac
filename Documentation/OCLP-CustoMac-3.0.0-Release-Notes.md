@@ -43,11 +43,15 @@ Experimental detection only authorizes the shared Modern Wi-Fi root patch. It do
 
 ## Runtime Validation
 
-The current final pre-publication RC, built from `6ef78041577bd00ef4d7b5aabe215ff969e4c8de` after the GUI-branding cleanup, has passed **Gate 1 — Intel AX210**. KGP successfully reverted the existing root patches, returned the system to CLEAN, completed OCLP-CustoMac Root Patching, and rebooted to working AppleHDA, Intel Wi-Fi, bidirectional AirPlay, and bidirectional normal Apple Screen Mirroring. **Gate 2 — Broadcom BCM943602CDP remains pending**, so publication is not yet authorized. The detailed gate record is [OCLP-CustoMac 3.0.0 RC Runtime Validation](../REPORTS/OCLP_CUSTOMAC_3.0.0_RC_RUNTIME_VALIDATION.md).
+The current final pre-publication RC, built from `6ef78041577bd00ef4d7b5aabe215ff969e4c8de` after the GUI-branding cleanup, has passed both physical runtime gates. **Gate 1 — Intel AX210** completed Revert, return to CLEAN, root patching, reboot, and the validated Intel runtime checks. **Gate 2 — Broadcom BCM943602CDP** then passed on the retained final-RC Modern Wireless / Modern Audio snapshot after the physical Intel-to-Broadcom adapter change. Publication runtime gates are **COMPLETE**. The detailed gate record is [OCLP-CustoMac 3.0.0 RC Runtime Validation](../REPORTS/OCLP_CUSTOMAC_3.0.0_RC_RUNTIME_VALIDATION.md).
 
 ### Broadcom control
 
 BCM943602CDP retained working AppleHDA, Wi-Fi, and tested AWDL/Continuity behavior with the Intel detector present.
+
+For final RC Gate 2, KGP removed AX210 after the successful Gate-1 cycle and reinstalled BCM943602CDP without reverting or reapplying root patches. The existing final-RC Modern Wireless / Modern Audio snapshot immediately delivered working AppleHDA, Broadcom Wi-Fi, bidirectional AirDrop, bidirectional AirPlay, bidirectional normal Apple Screen Mirroring, Continuity Camera, and Personal Hotspot. This proves the shared root-patch environment remained hardware-neutral across the Intel-to-Broadcom swap.
+
+This final gate was not a new Broadcom Revert -> CLEAN -> Root Patch cycle. Earlier development/regression testing separately validated Broadcom detection and patch application, and the final GUI-branding cleanup changed no related functional code.
 
 ### Intel AX210
 

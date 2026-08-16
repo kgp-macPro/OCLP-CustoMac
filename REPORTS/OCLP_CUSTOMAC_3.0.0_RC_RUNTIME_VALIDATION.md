@@ -2,7 +2,7 @@
 
 Date: 2026-08-16
 
-Status: **GATE 1 PASS — GATE 2 PENDING**
+Status: **GATE 1 PASS — GATE 2 PASS — PUBLICATION RUNTIME GATES COMPLETE**
 
 ## Release-candidate identity
 
@@ -44,9 +44,36 @@ Those remain external AirportItlwm runtime/driver limitations, distinct from OCL
 
 ## Gate 2 — Broadcom BCM943602CDP
 
-Status: **PENDING**
+Hardware: Broadcom BCM943602CDP
 
-Publication remains blocked until KGP completes the final physical BCM943602CDP runtime gate. No GitHub push, tag, or release is authorized by the Gate-1 result alone.
+Result: **PASS**
+
+KGP performed the following real-system sequence:
+
+1. Gate 1 had already completed a successful Revert -> clean state -> OCLP-CustoMac Root Patch -> reboot cycle with Intel AX210 using this final RC.
+2. After Gate 1, KGP removed the physical Intel AX210 and reinstalled the established Broadcom BCM943602CDP adapter.
+3. Root patches were **not** reverted and reapplied after changing the Wi-Fi card.
+4. The already-installed Modern Wireless / Modern Audio root-patch snapshot produced by the final RC was retained.
+5. After booting with Broadcom hardware:
+   - AppleHDA: **PASS**
+   - Broadcom Wi-Fi: **PASS**
+   - AirDrop: **PASS — bidirectional**
+   - AirPlay: **PASS — bidirectional**
+   - normal Apple Screen Mirroring: **PASS — bidirectional**
+   - Continuity Camera: **PASS**
+   - Personal Hotspot: **PASS**
+
+This validates Broadcom runtime operation on the same OCLP-CustoMac Modern Wireless / Modern Audio root-patched system previously validated with Intel AX210. It also confirms the intended hardware-neutral nature of the shared Modern Wireless root-patch environment: changing from supported Intel hardware to supported Broadcom hardware required no new root-patch operation.
+
+This particular final Gate 2 did **not** include a Broadcom Revert -> CLEAN -> Root Patch cycle. The Broadcom detection and root-patch application path was independently runtime validated during the preceding development and regression phases, and the final GUI-branding cleanup changed no Broadcom detection or root-patch logic.
+
+## Publication gate status
+
+- Gate 1 — Intel AX210: **PASS**
+- Gate 2 — Broadcom BCM943602CDP: **PASS**
+- publication runtime gates: **COMPLETE**
+
+The runtime prerequisites for publication are complete. GitHub push, tag, and release actions remain unperformed and require separate authorization.
 
 ## Artifact integrity
 
