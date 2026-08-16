@@ -56,4 +56,3 @@ This documentation update did not rebuild or alter the RC. Its recorded identiti
 - `OpenCore-Patcher-Uninstaller.pkg`: `3e37647e8bab1602eb129bb7651dd88ab28afeb0302cc03c9e15a7258b122ed1`
 - `payloads.dmg`: `082de073e0d103d7bd4b47852007f2b6ab360eda5b4737a089cf3b34a3910f91`
 - `Universal-Binaries.dmg`: `3659ae0ebadc1062252bbeeb7fe75dce292b5b9d599681c6dfa3dc4430bbc6a4`
-
