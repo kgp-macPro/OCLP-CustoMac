@@ -71,11 +71,6 @@ class CheckBinaryUpdates:
                 # Release build > special build: assume special build is newer
                 return False
 
-        if first_version == second_version:
-            if not self.constants.commit_info[0].startswith("refs/tags"):
-                # Check for nightly builds
-                return True
-
         return first_version > second_version
 
 

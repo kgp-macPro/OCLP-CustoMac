@@ -103,7 +103,7 @@ class PublicationContractTests(unittest.TestCase):
         self.assertEqual(current.repo_link, expected_repo)
         self.assertEqual(
             current.installer_pkg_url,
-            f"{expected_repo}/releases/download/v3.0.0/AutoPkg-Assets.pkg",
+            f"{expected_repo}/releases/download/v3.0.1/AutoPkg-Assets.pkg",
         )
 
         operational_sources = [

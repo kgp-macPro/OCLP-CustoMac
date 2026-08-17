@@ -1,5 +1,9 @@
 # OpenCore Legacy Patcher changelog
 
+## 3.0.1
+- Fix the inherited same-version application update loop
+- No intended Root Patch, wireless, audio, KDK, payload, or EFI functional changes
+
 ## 3.0.0
 - Restore support for FileVault 2 on macOS 26
 - Add USB mappings for macOS 26
