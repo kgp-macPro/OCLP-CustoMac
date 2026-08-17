@@ -10,6 +10,10 @@
 
 OCLP-CustoMac is an independent, focused OpenCore Legacy Patcher derivative developed primarily for advanced Custom Mac and Hackintosh systems. Its first public release is fully runtime validated on **macOS Tahoe 26.x / Darwin 25**.
 
+Current release: **[OCLP-CustoMac 3.0.1 — macOS Tahoe](https://github.com/kgp-macPro/OCLP-CustoMac/releases/tag/v3.0.1)**
+
+Version 3.0.1 is a minimal maintenance hotfix for the inherited same-version application-update loop. It contains no intended Root Patch, Modern Wireless, Modern Audio / AppleHDA, KDK, payload, or EFI functional changes.
+
 The registered root-patch families are deliberately limited to:
 
 - **Modern Wireless**
@@ -349,8 +353,6 @@ For Intel, an old Broadcom `IOName` spoof used solely for predecessor detection 
 
 - [InsanelyMac primary discussion](https://www.insanelymac.com/forum/topic/362042-experimental-fork-of-oclp-300-nightly-%E2%80%93-modern-wi-fi-awdl-and-applehda-fully-working-under-tahoe/)
 - [tonymacx86 mirror discussion](https://www.tonymacx86.com/threads/experimental-fork-of-oclp-3-0-0-nightly-modern-wi-fi-awdl-and-applehda-fully-working-under-tahoe-26-x.332849/)
-
-Repository, release, updater, and support URLs will be updated together during the separately authorized online-promotion step. This local release-candidate task does not create or guess a future GitHub release URL.
 
 ## Project Development & Research
 
